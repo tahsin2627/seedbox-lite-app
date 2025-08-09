@@ -592,13 +592,10 @@ const VideoPlayer = ({
     setShowSettings(false);
   };
 
-  // Handler for hiding torrent stats overlay
-  const handleHideTorrentStats = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-    console.log('Hiding torrent stats overlay');
-    setShowTorrentStats(false);
+  // Simple toggle function for torrent stats overlay
+  const toggleTorrentStats = () => {
+    console.log('Toggling torrent stats. Current state:', showTorrentStats);
+    setShowTorrentStats(prev => !prev);
   };
 
   // Subtitle management functions
@@ -669,8 +666,8 @@ const VideoPlayer = ({
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => isPlaying && setShowControls(false)}
     >
-      {/* Close Button */}
-      {onClose && (
+      {/* Close Button - hide when overlay is visible */}
+      {onClose && !showTorrentStats && (
         <button 
           className="video-close-button"
           onClick={onClose}
@@ -698,14 +695,7 @@ const VideoPlayer = ({
 
       {/* Enhanced Torrent Stats Overlay */}
       {showTorrentStats && torrentHash && (
-        <div 
-          className="torrent-stats-overlay"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
+        <div className="torrent-stats-overlay">
           <div className="stats-header">
             <div className="network-status">
               {networkStatus === 'connected' ? (
@@ -720,14 +710,30 @@ const VideoPlayer = ({
                  networkStatus === 'seeking' ? 'Seeking Peers' : 'Disconnected'}
               </span>
             </div>
-            <button 
-              className="stats-minimize"
-              onClick={handleHideTorrentStats}
-              onMouseDown={(e) => e.stopPropagation()}
-              title="Hide torrent stats"
-            >
-              <Minimize2 size={16} />
-            </button>
+            {/* Control buttons */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {/* Main video close button */}
+              {onClose && (
+                <button 
+                  className="overlay-video-close-button"
+                  onClick={onClose}
+                  title="Close video player"
+                >
+                  <X size={20} />
+                </button>
+              )}
+              {/* Overlay close button */}
+              <button 
+                className="stats-minimize"
+                onClick={() => {
+                  console.log('Direct close button clicked');
+                  setShowTorrentStats(false);
+                }}
+                title="Hide torrent stats overlay"
+              >
+                <X size={16} />
+              </button>
+            </div>
           </div>
           
           <div className="stats-grid">
@@ -778,7 +784,7 @@ const VideoPlayer = ({
       {!showTorrentStats && torrentHash && (
         <button 
           className="stats-show-button"
-          onClick={() => setShowTorrentStats(true)}
+          onClick={toggleTorrentStats}
           title="Show torrent stats"
         >
           <Activity size={16} />

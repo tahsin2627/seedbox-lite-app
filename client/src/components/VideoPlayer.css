@@ -22,7 +22,7 @@
 .video-close-button {
   position: absolute;
   top: 20px;
-  right: 20px;
+  right: 280px; /* Moved left to avoid overlay conflict */
   background: rgba(0, 0, 0, 0.8);
   border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
@@ -111,7 +111,7 @@
   padding: 16px;
   color: white;
   font-size: 13px;
-  z-index: 25;
+  z-index: 1050; /* Higher than video close button */
   min-width: 240px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
@@ -188,9 +188,9 @@
 
 /* Minimize button for torrent stats */
 .stats-minimize {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #ccc;
+  background: rgba(239, 68, 68, 0.8); /* Red background to make it clear it's a close button */
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  color: white;
   cursor: pointer;
   padding: 6px;
   width: 28px;
@@ -200,13 +200,48 @@
   justify-content: center;
   border-radius: 6px;
   transition: all 0.2s ease;
+  pointer-events: auto; /* Ensure button receives clicks */
+  position: relative;
+  z-index: 1052; /* Above the overlay */
+}
+
+/* Video close button in overlay */
+.overlay-video-close-button {
+  background: rgba(239, 68, 68, 0.9);
+  border: 2px solid rgba(239, 68, 68, 0.8);
+  color: white;
+  cursor: pointer;
+  padding: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1053; /* Above other overlay elements */
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.overlay-video-close-button:hover {
+  background: rgba(239, 68, 68, 1);
+  border-color: rgba(239, 68, 68, 1);
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+}
+
+.overlay-video-close-button:active {
+  transform: scale(0.95);
 }
 
 .stats-minimize:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(239, 68, 68, 1);
+  border-color: rgba(239, 68, 68, 0.8);
   color: white;
-  transform: scale(1.05);
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
 .stats-minimize:active {
@@ -408,10 +443,11 @@
   color: #4ade80;
   padding: 10px;
   cursor: pointer;
-  z-index: 25;
+  z-index: 1051; /* Higher z-index to be above other elements */
   transition: all 0.3s ease;
   backdrop-filter: blur(10px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: auto; /* Ensure button receives clicks */
 }
 
 .stats-show-button:hover {
