@@ -40,59 +40,68 @@ const nameToHash = {};         // Quick name-to-hash lookup
 // IMDB Integration
 const imdbCache = new Map();
 
-// Enhanced torrent name cleaning with better regex patterns
-function cleanTorrentName(torrentName) {
+  // Enhanced title cleaning for better API results
+  function cleanTorrentName(torrentName) {
     console.log(`🔍 Cleaning torrent name: "${torrentName}"`);
     
-    if (!torrentName) {
-        return { title: '', year: null };
+    // Extract year first before cleaning
+    const yearMatch = torrentName.match(/\b(19|20)\d{2}\b/);
+    const year = yearMatch ? yearMatch[0] : null;
+    
+    // Enhanced series detection - more comprehensive patterns
+    const isLikelySeries = /\b(S\d+|Season|SEASON|series|Series|SERIES|E\d+|Episode|EPISODE|COMPLETE|Complete|complete)\b/i.test(torrentName);
+    console.log(`📺 Series detection: ${isLikelySeries ? 'YES' : 'NO'}`);
+    
+    // First pass: Remove common torrent artifacts
+    let cleaned = torrentName
+      .replace(/\[(.*?)\]/g, '') // Remove [groups] like [YTS.MX], [OxTorrent.com]
+      .replace(/\((.*?)\)/g, '') // Remove (year) and other parentheses content initially
+      .replace(/\.(720p|1080p|480p|2160p|4K)/gi, '') // Remove quality indicators
+      .replace(/\.(BluRay|WEBRip|WEB-DL|DVDRip|CAMRip|TS|TC|WEB)/gi, '') // Remove source indicators
+      .replace(/\.(x264|x265|H264|H265|HEVC|AVC)/gi, '') // Remove codec info
+      .replace(/\.(AAC|MP3|AC3|DTS|FLAC)/gi, '') // Remove audio codec
+      .replace(/\.(mkv|mp4|avi|mov|flv)/gi, '') // Remove file extensions
+      .replace(/\b(REPACK|PROPER|EXTENDED|UNRATED|DIRECTORS|CUT)\b/gi, '') // Remove edition info
+      .replace(/\b\d+CH\b/gi, '') // Remove channel info like 2CH, 5.1CH
+      .replace(/\b(PSA|YTS|YIFY|RARBG|EZTV|TGx)\b/gi, '') // Remove release groups
+      .replace(/\./g, ' ') // Replace dots with spaces
+      .replace(/[-_]/g, ' ') // Replace hyphens and underscores with spaces
+      .replace(/\s+/g, ' ') // Normalize multiple spaces
+      .trim();
+    
+    console.log(`🧹 After basic cleaning: "${cleaned}"`);
+    
+    if (isLikelySeries) {
+      console.log(`📺 Applying series-specific cleaning`);
+      
+      // For series, aggressively remove season/episode specific info
+      cleaned = cleaned
+        .replace(/\b(S\d+.*)/gi, '') // Remove S01 and everything after
+        .replace(/\b(Season\s*\d+.*)/gi, '') // Remove Season 1 and everything after
+        .replace(/\b(SEASON\s*\d+.*)/gi, '') // Remove SEASON 1 and everything after
+        .replace(/\b(E\d+.*)/gi, '') // Remove E01 and everything after
+        .replace(/\b(Episode\s*\d+.*)/gi, '') // Remove Episode 1 and everything after
+        .replace(/\b(EPISODE\s*\d+.*)/gi, '') // Remove EPISODE 1 and everything after
+        .replace(/\b(COMPLETE.*)/gi, '') // Remove COMPLETE and everything after
+        .replace(/\b(Complete.*)/gi, '') // Remove Complete and everything after
+        .replace(/\b(complete.*)/gi, '') // Remove complete and everything after
+        .replace(/\bSERIES\b/gi, '') // Remove standalone SERIES word
+        .replace(/\bSeries\b/gi, '') // Remove standalone Series word
+        .replace(/\bseries\b/gi, '') // Remove standalone series word
+        .replace(/\bWEB\b/gi, '') // Remove WEB
+        .replace(/\b\d+CH\b/gi, '') // Remove channel info again
+        .replace(/\b(PSA|YTS|YIFY|RARBG|EZTV|TGx)\b/gi, '') // Remove release groups again
+        .trim();
     }
     
-    // Start with the original name
-    let cleanedName = torrentName;
+    // Final cleanup
+    cleaned = cleaned
+      .replace(/\s+/g, ' ')
+      .trim();
     
-    // Remove common quality indicators and extensions
-    cleanedName = cleanedName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|m4v|3gp|webm)$/i, '');
-    
-    // Remove quality indicators (more comprehensive)
-    const qualityPatterns = [
-        /\b(720p|1080p|480p|4k|uhd|hd|bluray|brrip|webrip|dvdrip|camrip|ts|telesync|hdtv|web-dl|x264|x265|h264|h265|hevc|10bit|aac|ac3|dts|mp3)\b/gi,
-        /\b(yify|sparks|rarbg|eztv|ettv|galaxy|geckos|scene|repack|proper|real|internal|limited|unrated|extended|directors\.cut)\b/gi,
-        /\[\w+\]/g, // Remove group tags like [YTS] [RARBG]
-        /\([^)]*rip[^)]*\)/gi, // Remove anything with 'rip' in parentheses
-        /\b\d{3,4}mb\b/gi, // Remove file sizes
-        /www\.\w+\.(com|org|net)/gi // Remove website URLs
-    ];
-    
-    qualityPatterns.forEach(pattern => {
-        cleanedName = cleanedName.replace(pattern, '');
-    });
-    
-    // Extract year (look for 4-digit year in parentheses or standalone)
-    let year = null;
-    const yearMatch = cleanedName.match(/\b(19\d{2}|20\d{2})\b/);
-    if (yearMatch) {
-        year = parseInt(yearMatch[1]);
-        cleanedName = cleanedName.replace(/\b(19\d{2}|20\d{2})\b/, '');
-    }
-    
-    // Remove parentheses and brackets with their content
-    cleanedName = cleanedName.replace(/[\[\(].*?[\]\)]/g, '');
-    
-    // Replace dots, underscores, dashes with spaces
-    cleanedName = cleanedName.replace(/[._-]/g, ' ');
-    
-    // Remove multiple spaces and trim
-    cleanedName = cleanedName.replace(/\s+/g, ' ').trim();
-    
-    // Remove common articles for better matching, but store original for display
-    const title = cleanedName;
-    
-    console.log(`🧹 After basic cleaning: "${cleanedName}"`);
-    console.log(`✨ Final cleaned result: title="${title}", year=${year}`);
-    
-    return { title, year };
-}
+    console.log(`✨ Final cleaned result: title="${cleaned}", year=${year}`);
+    return { title: cleaned, year };
+  }
 
 async function fetchIMDBData(torrentName) {
     console.log(`🎬 Fetching IMDB data for: "${torrentName}"`);
@@ -112,37 +121,48 @@ async function fetchIMDBData(torrentName) {
         return null;
     }
     
+    // Detect if it's likely a series/show
+    const isLikelySeries = /\b(S\d+|Season|Episode|EP\d+|E\d+|Series|Complete)\b/i.test(torrentName);
+    console.log(`🔍 Likely series: ${isLikelySeries} for "${torrentName}"`);
+    
     // Get API key from environment
     const omdbKey = process.env.OMDB_API_KEY || 'trilogy';
     
-    // Multiple search strategies with OMDb
-    const omdbStrategies = [
-        // Strategy 1: Title + Year (most accurate)
+    // Multiple search strategies with OMDb for both movies and series
+    const omdbStrategies = [];
+    
+    if (isLikelySeries) {
+        // For series, try series type first
+        omdbStrategies.push(
+            year ? `http://www.omdbapi.com/?apikey=${omdbKey}&t=${encodeURIComponent(title)}&y=${year}&type=series` : null,
+            `http://www.omdbapi.com/?apikey=${omdbKey}&t=${encodeURIComponent(title)}&type=series`,
+            `http://www.omdbapi.com/?apikey=${omdbKey}&s=${encodeURIComponent(title)}&type=series`
+        );
+    }
+    
+    // Add movie searches (for both movies and as fallback for series)
+    omdbStrategies.push(
         year ? `http://www.omdbapi.com/?apikey=${omdbKey}&t=${encodeURIComponent(title)}&y=${year}` : null,
-        
-        // Strategy 2: Title only
         `http://www.omdbapi.com/?apikey=${omdbKey}&t=${encodeURIComponent(title)}`,
-        
-        // Strategy 3: Search API for multiple results
         `http://www.omdbapi.com/?apikey=${omdbKey}&s=${encodeURIComponent(title)}&type=movie`,
-        
-        // Strategy 4: Try with "The" prefix for articles
         `http://www.omdbapi.com/?apikey=${omdbKey}&t=${encodeURIComponent('The ' + title)}`
-    ].filter(Boolean);
+    );
+    
+    const filteredStrategies = omdbStrategies.filter(Boolean);
     
     // Try OMDb first
-    for (const url of omdbStrategies) {
+    for (const url of filteredStrategies) {
         try {
             console.log(`🔍 Trying OMDb: ${url}`);
             const response = await fetch(url);
             const data = await response.json();
             
             if (data && data.Response === 'True') {
-                // For search results, take the first movie
+                // For search results, take the first result
                 const movieData = data.Search ? data.Search[0] : data;
                 
                 if (movieData && movieData.Title) {
-                    console.log(`✅ Found OMDb data: ${movieData.Title} (${movieData.Year})`);
+                    console.log(`✅ Found OMDb data: ${movieData.Title} (${movieData.Year}) - Type: ${movieData.Type || 'movie'}`);
                     
                     const result = {
                         Title: movieData.Title,
@@ -153,12 +173,57 @@ async function fetchIMDBData(torrentName) {
                         Director: movieData.Director,
                         Actors: movieData.Actors,
                         Poster: movieData.Poster !== 'N/A' ? movieData.Poster : null,
+                        Backdrop: null, // Will be enhanced below if possible
                         Genre: movieData.Genre,
                         Runtime: movieData.Runtime,
                         Rated: movieData.Rated,
                         imdbID: movieData.imdbID,
+                        Type: movieData.Type || 'movie',
                         source: 'omdb'
                     };
+                    
+                    // Try to enhance OMDb data with TMDB backdrop for better visuals
+                    try {
+                        if (isLikelySeries && movieData.Type === 'series') {
+                            const tmdbTvUrl = `https://api.themoviedb.org/3/search/tv?api_key=3fd2be6f0c70a2a598f084ddfb75487d&query=${encodeURIComponent(movieData.Title)}`;
+                            const tmdbResponse = await fetch(tmdbTvUrl, {
+                                method: 'GET',
+                                headers: { 'Accept': 'application/json', 'User-Agent': 'SeedboxLite/1.0' },
+                                signal: AbortSignal.timeout(10000)
+                            });
+                            
+                            if (tmdbResponse.ok) {
+                                const tmdbData = await tmdbResponse.json();
+                                if (tmdbData.results && tmdbData.results.length > 0) {
+                                    const show = tmdbData.results[0];
+                                    if (show.backdrop_path) {
+                                        result.Backdrop = `https://image.tmdb.org/t/p/w1280${show.backdrop_path}`;
+                                        console.log(`🎨 Enhanced with TMDB backdrop: ${result.Backdrop}`);
+                                    }
+                                }
+                            }
+                        } else {
+                            const tmdbMovieUrl = `https://api.themoviedb.org/3/search/movie?api_key=3fd2be6f0c70a2a598f084ddfb75487d&query=${encodeURIComponent(movieData.Title)}`;
+                            const tmdbResponse = await fetch(tmdbMovieUrl, {
+                                method: 'GET',
+                                headers: { 'Accept': 'application/json', 'User-Agent': 'SeedboxLite/1.0' },
+                                signal: AbortSignal.timeout(10000)
+                            });
+                            
+                            if (tmdbResponse.ok) {
+                                const tmdbData = await tmdbResponse.json();
+                                if (tmdbData.results && tmdbData.results.length > 0) {
+                                    const movie = tmdbData.results[0];
+                                    if (movie.backdrop_path) {
+                                        result.Backdrop = `https://image.tmdb.org/t/p/w1280${movie.backdrop_path}`;
+                                        console.log(`🎨 Enhanced with TMDB backdrop: ${result.Backdrop}`);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (enhanceError) {
+                        console.log(`⚠️ Could not enhance with TMDB backdrop: ${enhanceError.message}`);
+                    }
                     
                     // Cache the result
                     imdbCache.set(torrentName, result);
@@ -172,13 +237,97 @@ async function fetchIMDBData(torrentName) {
         }
     }
     
-    // Fallback to TMDB (free public API)
+    // Fallback to TMDB (try both movies and TV series)
     console.log(`🎭 Trying TMDB as fallback for: ${title}`);
+    
+    // Try TV series first if likely series
+    if (isLikelySeries) {
+        try {
+            const tmdbTvUrl = `https://api.themoviedb.org/3/search/tv?api_key=3fd2be6f0c70a2a598f084ddfb75487d&query=${encodeURIComponent(title)}${year ? `&first_air_date_year=${year}` : ''}`;
+            console.log(`🔍 Trying TMDB TV: ${tmdbTvUrl}`);
+            
+            const searchResponse = await fetch(tmdbTvUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'SeedboxLite/1.0'
+                },
+                signal: AbortSignal.timeout(15000) // 15 second timeout
+            });
+            
+            if (!searchResponse.ok) {
+                throw new Error(`HTTP ${searchResponse.status}: ${searchResponse.statusText}`);
+            }
+            
+            const searchData = await searchResponse.json();
+            
+            if (searchData.results && searchData.results.length > 0) {
+                const show = searchData.results[0];
+                
+                // Get detailed info for TV show
+                const detailsUrl = `https://api.themoviedb.org/3/tv/${show.id}?api_key=3fd2be6f0c70a2a598f084ddfb75487d&append_to_response=credits`;
+                const detailsResponse = await fetch(detailsUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'SeedboxLite/1.0'
+                    },
+                    signal: AbortSignal.timeout(15000)
+                });
+                
+                if (!detailsResponse.ok) {
+                    throw new Error(`HTTP ${detailsResponse.status}: ${detailsResponse.statusText}`);
+                }
+                
+                const details = await detailsResponse.json();
+                
+                console.log(`✅ Found TMDB TV data: ${details.name} (${details.first_air_date?.substring(0, 4)})`);
+                
+                const result = {
+                    Title: details.name,
+                    Year: details.first_air_date?.substring(0, 4),
+                    imdbRating: details.vote_average ? (details.vote_average / 10 * 10).toFixed(1) : null,
+                    imdbVotes: details.vote_count ? `${details.vote_count.toLocaleString()}` : null,
+                    Plot: details.overview,
+                    Director: details.created_by?.map(creator => creator.name).join(', ') || 'N/A',
+                    Actors: details.credits?.cast?.slice(0, 4).map(actor => actor.name).join(', '),
+                    Poster: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null,
+                    Backdrop: details.backdrop_path ? `https://image.tmdb.org/t/p/w1280${details.backdrop_path}` : null,
+                    Genre: details.genres?.map(g => g.name).join(', '),
+                    Runtime: details.episode_run_time?.[0] ? `${details.episode_run_time[0]} min` : null,
+                    Rated: 'N/A',
+                    tmdbID: details.id,
+                    Type: 'series',
+                    source: 'tmdb-tv'
+                };
+                
+                // Cache the result
+                imdbCache.set(torrentName, result);
+                return result;
+            }
+        } catch (error) {
+            console.log(`❌ TMDB TV error: ${error.message}`);
+        }
+    }
+    
+    // Try TMDB movies as final fallback
     try {
         const tmdbSearchUrl = `https://api.themoviedb.org/3/search/movie?api_key=3fd2be6f0c70a2a598f084ddfb75487d&query=${encodeURIComponent(title)}${year ? `&year=${year}` : ''}`;
-        console.log(`🔍 Trying TMDB: ${tmdbSearchUrl}`);
+        console.log(`🔍 Trying TMDB Movies: ${tmdbSearchUrl}`);
         
-        const searchResponse = await fetch(tmdbSearchUrl);
+        const searchResponse = await fetch(tmdbSearchUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'SeedboxLite/1.0'
+            },
+            signal: AbortSignal.timeout(15000)
+        });
+        
+        if (!searchResponse.ok) {
+            throw new Error(`HTTP ${searchResponse.status}: ${searchResponse.statusText}`);
+        }
+        
         const searchData = await searchResponse.json();
         
         if (searchData.results && searchData.results.length > 0) {
@@ -186,10 +335,22 @@ async function fetchIMDBData(torrentName) {
             
             // Get detailed info
             const detailsUrl = `https://api.themoviedb.org/3/movie/${movie.id}?api_key=3fd2be6f0c70a2a598f084ddfb75487d&append_to_response=credits`;
-            const detailsResponse = await fetch(detailsUrl);
+            const detailsResponse = await fetch(detailsUrl, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'User-Agent': 'SeedboxLite/1.0'
+                },
+                signal: AbortSignal.timeout(15000)
+            });
+            
+            if (!detailsResponse.ok) {
+                throw new Error(`HTTP ${detailsResponse.status}: ${detailsResponse.statusText}`);
+            }
+            
             const details = await detailsResponse.json();
             
-            console.log(`✅ Found TMDB data: ${details.title} (${details.release_date?.substring(0, 4)})`);
+            console.log(`✅ Found TMDB Movie data: ${details.title} (${details.release_date?.substring(0, 4)})`);
             
             const result = {
                 Title: details.title,
@@ -200,11 +361,13 @@ async function fetchIMDBData(torrentName) {
                 Director: details.credits?.crew?.find(person => person.job === 'Director')?.name,
                 Actors: details.credits?.cast?.slice(0, 4).map(actor => actor.name).join(', '),
                 Poster: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null,
+                Backdrop: details.backdrop_path ? `https://image.tmdb.org/t/p/w1280${details.backdrop_path}` : null,
                 Genre: details.genres?.map(g => g.name).join(', '),
                 Runtime: details.runtime ? `${details.runtime} min` : null,
-                Rated: 'N/A', // TMDB doesn't have ratings
+                Rated: 'N/A',
                 tmdbID: details.id,
-                source: 'tmdb'
+                Type: 'movie',
+                source: 'tmdb-movie'
             };
             
             // Cache the result
@@ -212,10 +375,10 @@ async function fetchIMDBData(torrentName) {
             return result;
         }
     } catch (error) {
-        console.log(`❌ TMDB error: ${error.message}`);
+        console.log(`❌ TMDB Movie error: ${error.message}`);
     }
     
-    console.log(`❌ No movie data found for: ${title}`);
+    console.log(`❌ No movie/series data found for: ${title}`);
     return null;
 }
 
@@ -1089,32 +1252,62 @@ app.delete('/api/torrents', (req, res) => {
 });
 
 // Cache stats
-app.get('/api/cache/stats', (req, res) => {
-  const activeTorrents = Object.keys(torrents).length;
-  let totalDownloaded = 0;
-  let totalSize = 0;
-  
-  Object.values(torrents).forEach(torrent => {
-    totalDownloaded += torrent.downloaded || 0;
-    totalSize += torrent.length || 0;
-  });
-  
-  const formatBytes = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-  
-  const stats = {
-    totalDownloaded: formatBytes(totalDownloaded),
-    activeTorrents,
-    totalSize: formatBytes(totalSize)
-  };
-  
-  console.log(`📊 Cache stats:`, stats);
-  res.json(stats);
+app.get('/api/cache/stats', async (req, res) => {
+  try {
+    const fs = require('fs').promises;
+    const path = require('path');
+    
+    const activeTorrents = Object.keys(torrents).length;
+    
+    // Function to get directory size
+    const getDirectorySize = async (dirPath) => {
+      let size = 0;
+      try {
+        const items = await fs.readdir(dirPath);
+        for (const item of items) {
+          const itemPath = path.join(dirPath, item);
+          const stats = await fs.stat(itemPath);
+          if (stats.isDirectory()) {
+            size += await getDirectorySize(itemPath);
+          } else {
+            size += stats.size;
+          }
+        }
+      } catch (error) {
+        console.warn('Error calculating directory size:', error.message);
+      }
+      return size;
+    };
+    
+    // Calculate actual cache size from download directory
+    const downloadDir = path.join(__dirname, 'downloads');
+    let cacheSize = 0;
+    try {
+      cacheSize = await getDirectorySize(downloadDir);
+    } catch (error) {
+      console.warn('Could not calculate cache size:', error.message);
+    }
+    
+    const formatBytes = (bytes) => {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+    
+    const stats = {
+      totalSizeFormatted: formatBytes(cacheSize),
+      activeTorrents,
+      cacheSize: cacheSize
+    };
+    
+    console.log(`📊 Cache stats: ${formatBytes(cacheSize)} (${activeTorrents} torrents)`);
+    res.json(stats);
+  } catch (error) {
+    console.error('Error getting cache stats:', error);
+    res.status(500).json({ error: 'Failed to get cache stats' });
+  }
 });
 
 // Disk usage

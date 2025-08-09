@@ -31,12 +31,31 @@ const Layout = () => {
 
         const stats = await statsResponse.json().catch(() => ({}));
         const torrentsData = await torrentsResponse.json().catch(() => ({ torrents: [] }));
-        const diskData = await diskResponse.json().catch(() => ({ percentage: 0 }));
+        const diskData = await diskResponse.json().catch(() => ({ percentage: 0, total: 0 }));
+
+        // Calculate cache usage percentage relative to total disk space
+        const cacheSize = stats.cacheSize || 0;
+        const totalDisk = diskData.total || 1;
+        const cacheUsagePercentage = totalDisk > 0 ? (cacheSize / totalDisk) * 100 : 0;
+
+        // Format total disk size for display
+        const formatBytes = (bytes) => {
+          if (bytes === 0) return '0 B';
+          const k = 1024;
+          const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        };
 
         setCacheStats({
           totalSizeFormatted: stats.totalSizeFormatted || '0 B',
           activeTorrents: (torrentsData.torrents || []).length,
-          diskUsage: diskData || { percentage: 0 }
+          diskUsage: {
+            percentage: diskData.percentage || 0,
+            total: diskData.total || 0
+          },
+          cacheUsagePercentage: cacheUsagePercentage,
+          totalDiskFormatted: formatBytes(totalDisk)
         });
       } catch (error) {
         console.error('Error loading cache stats:', error);
@@ -123,10 +142,10 @@ const Layout = () => {
                   <div className="disk-bar-mini">
                     <div 
                       className="disk-fill-mini"
-                      style={{ width: `${cacheStats.diskUsage.percentage || 0}%` }}
+                      style={{ width: `${cacheStats.cacheUsagePercentage || 0}%` }}
                     />
                   </div>
-                  <span>{(cacheStats.diskUsage.percentage || 0).toFixed(1)}% disk used</span>
+                  <span>{(cacheStats.cacheUsagePercentage || 0).toFixed(1)}% of {cacheStats.totalDiskFormatted}</span>
                 </div>
               </div>
             </Link>

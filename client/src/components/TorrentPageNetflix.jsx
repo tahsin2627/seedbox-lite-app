@@ -210,9 +210,16 @@ const TorrentPageNetflix = () => {
     <div className="netflix-page">
       {/* Hero Section */}
       <div className="netflix-hero" style={{
-        backgroundImage: imdbData?.Poster && imdbData.Poster !== 'N/A' 
-          ? `linear-gradient(to right, rgba(0,0,0,0.8) 50%, rgba(0,0,0,0.2) 100%), url(${imdbData.Poster})`
-          : 'linear-gradient(135deg, #0f0f23 0%, #1a1a3a 50%, #2d2d5f 100%)'
+        backgroundImage: (() => {
+          // Prefer backdrop for header, fallback to poster, then default gradient
+          if (imdbData?.Backdrop) {
+            return `linear-gradient(to right, rgba(0,0,0,0.7) 40%, rgba(0,0,0,0.3) 100%), url(${imdbData.Backdrop})`;
+          } else if (imdbData?.Poster && imdbData.Poster !== 'N/A') {
+            return `linear-gradient(to right, rgba(0,0,0,0.8) 50%, rgba(0,0,0,0.2) 100%), url(${imdbData.Poster})`;
+          } else {
+            return 'linear-gradient(135deg, #0f0f23 0%, #1a1a3a 50%, #2d2d5f 100%)';
+          }
+        })()
       }}>
         <div className="netflix-hero-content">
           <button 
