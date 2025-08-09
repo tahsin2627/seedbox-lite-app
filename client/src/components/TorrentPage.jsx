@@ -20,21 +20,17 @@ const TorrentPage = () => {
     try {
       setLoading(true);
       
-      // Fetch files and status in parallel
-      const [filesResponse, statusResponse] = await Promise.all([
-        fetch(config.getTorrentUrl(torrentHash, 'files')),
-        fetch(config.getTorrentUrl(torrentHash, 'status'))
-      ]);
+      // Use the Universal API endpoint that returns both torrent info and files
+      const response = await fetch(`${config.apiBaseUrl}/api/torrents/${torrentHash}`);
       
-      if (!filesResponse.ok || !statusResponse.ok) {
+      if (!response.ok) {
         throw new Error(`Failed to fetch torrent data`);
       }
       
-      const filesData = await filesResponse.json();
-      const statusData = await statusResponse.json();
+      const data = await response.json();
       
-      setTorrent(statusData);
-      setFiles(filesData.files || []);
+      setTorrent(data.torrent);
+      setFiles(data.files || []);
       
     } catch (err) {
       console.error('Error fetching torrent details:', err);
@@ -46,10 +42,10 @@ const TorrentPage = () => {
 
   const fetchTorrentProgress = useCallback(async () => {
     try {
-      const response = await fetch(config.getTorrentUrl(torrentHash, 'status'));
+      const response = await fetch(`${config.apiBaseUrl}/api/torrents/${torrentHash}`);
       if (response.ok) {
-        const statusData = await response.json();
-        setTorrent(prev => ({ ...prev, ...statusData }));
+        const data = await response.json();
+        setTorrent(prev => ({ ...prev, ...data.torrent }));
       }
     } catch (err) {
       console.error('Error fetching progress:', err);
