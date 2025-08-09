@@ -1,7 +1,7 @@
 .home-page {
   padding: 20px 40px; /* Reduced top/bottom padding, keep left/right */
   max-width: 1000px;
-  margin: 0 auto;
+  margin: 0; /* Remove auto centering to prevent left alignment */
   background: #0a0a0a;
   min-height: 100vh;
   width: 100%;
