@@ -1304,16 +1304,22 @@ app.get('/api/cache/stats', async (req, res) => {
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
 
+    // Cache limit (5GB default)
+    const cacheLimitBytes = 5 * 1024 * 1024 * 1024; // 5GB in bytes
+    const usagePercentage = cacheLimitBytes > 0 ? (downloadedBytes / cacheLimitBytes) * 100 : 0;
+
     const stats = {
       totalSizeFormatted: formatBytes(downloadedBytes), // Use actual downloaded data
       totalSize: downloadedBytes,
       activeTorrents,
       cacheSize: downloadedBytes, // Use downloaded bytes for cache calculation
       totalTorrentSize: cacheSize, // Total size of all torrents
-      totalTorrentSizeFormatted: formatBytes(cacheSize)
+      totalTorrentSizeFormatted: formatBytes(cacheSize),
+      cacheLimitFormatted: formatBytes(cacheLimitBytes),
+      usagePercentage: Math.round(usagePercentage * 100) / 100 // Round to 2 decimal places
     };
 
-    console.log(`📊 Cache stats: ${formatBytes(downloadedBytes)} downloaded (${activeTorrents} torrents, ${formatBytes(cacheSize)} total)`);
+    console.log(`📊 Cache stats: ${formatBytes(downloadedBytes)} downloaded (${activeTorrents} torrents, ${usagePercentage.toFixed(1)}% of 5GB limit)`);
     res.json(stats);
   } catch (error) {
     console.error('Error getting cache stats:', error);
