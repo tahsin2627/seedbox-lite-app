@@ -629,36 +629,12 @@ const upload = multer({
   }
 });
 
-// CORS Configuration
-const allowedOrigins = [
-  config.frontend.url,
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:3000',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:5174',
-  'http://127.0.0.1:3000',
-  'https://seedbox.isalman.dev',
-  'https://seedbox-api.isalman.dev'
-];
+// CORS Configuration - Allow all origins
+console.log('🌐 CORS: Allowing ALL origins (permissive mode)');
 
-console.log('🌐 CORS allowed origins:', allowedOrigins);
-console.log('🔧 Environment:', process.env.NODE_ENV);
-console.log('🔧 isDevelopment:', config.isDevelopment);
-
-// Enhanced CORS configuration
+// Simple CORS configuration allowing all origins
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      console.log('❌ CORS blocked origin:', origin);
-      return callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true, // Allow all origins
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: [
@@ -668,15 +644,12 @@ app.use(cors({
     'Accept',
     'Origin'
   ],
-  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+  optionsSuccessStatus: 200
 }));
 
-// Additional CORS headers for preflight
+// Additional permissive CORS headers
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin');
