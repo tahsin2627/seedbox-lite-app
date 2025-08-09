@@ -107,8 +107,9 @@ const TorrentPageNetflix = () => {
 
   const formatFileSize = (bytes) => {
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    if (bytes === 0) return '0 B';
+    if (!bytes || isNaN(bytes) || bytes === 0) return '0 B';
     const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+    if (isNaN(i) || i < 0) return '0 B';
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
   };
 
@@ -331,11 +332,11 @@ const TorrentPageNetflix = () => {
                       <div className="netflix-episode-header">
                         <h4>Episode {index + 1}</h4>
                         <span className="netflix-episode-duration">
-                          {formatFileSize(file.length)}
+                          {formatFileSize(file.size)}
                         </span>
                       </div>
                       <p className="netflix-episode-title">{file.name}</p>
-                      {progress && (
+                      {progress && progress.currentTime != null && progress.duration != null && (
                         <p className="netflix-episode-progress">
                           {progressService.formatTime(progress.currentTime)} / {progressService.formatTime(progress.duration)}
                         </p>
@@ -374,7 +375,7 @@ const TorrentPageNetflix = () => {
                     </div>
                     <div className="netflix-file-info">
                       <span className="netflix-file-name">{file.name}</span>
-                      <span className="netflix-file-size">{formatFileSize(file.length)}</span>
+                      <span className="netflix-file-size">{formatFileSize(file.size)}</span>
                     </div>
                   </div>
                 ))}
