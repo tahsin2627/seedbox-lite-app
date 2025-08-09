@@ -88,6 +88,8 @@ const VideoPlayer = ({
   
   const controlsTimeoutRef = useRef(null);
   const statsIntervalRef = useRef(null);
+  const lastTapTimeRef = useRef(0);
+  const tapCountRef = useRef(0);
 
   // Fetch real-time torrent statistics
   const fetchTorrentStats = useCallback(async () => {
@@ -467,6 +469,32 @@ const VideoPlayer = ({
     };
   }, [src, initialTime, onTimeUpdate, onProgress, updateBufferedProgress, torrentHash, fileIndex, title, hasShownResumeDialog, hasAppliedInitialTime]);
 
+  // Fullscreen event listeners for mobile compatibility
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+      setIsFullscreen(isCurrentlyFullscreen);
+    };
+
+    // Add event listeners for all browser prefixes
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
   // Optimized play/pause for instant streaming
   const togglePlay = async () => {
     if (!videoRef.current) return;
@@ -586,11 +614,43 @@ const VideoPlayer = ({
 
   const toggleFullscreen = () => {
     const container = videoRef.current.parentElement;
-    if (!document.fullscreenElement) {
-      container.requestFullscreen();
+    const video = videoRef.current;
+    
+    if (!isFullscreen) {
+      // Try to enter fullscreen
+      if (container.requestFullscreen) {
+        container.requestFullscreen();
+      } else if (container.webkitRequestFullscreen) {
+        // Safari
+        container.webkitRequestFullscreen();
+      } else if (container.mozRequestFullScreen) {
+        // Firefox
+        container.mozRequestFullScreen();
+      } else if (container.msRequestFullscreen) {
+        // IE/Edge
+        container.msRequestFullscreen();
+      } else if (video.webkitEnterFullscreen) {
+        // iOS Safari - use video element fullscreen
+        video.webkitEnterFullscreen();
+      } else if (video.requestFullscreen) {
+        // Fallback to video element
+        video.requestFullscreen();
+      }
       setIsFullscreen(true);
     } else {
-      document.exitFullscreen();
+      // Try to exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      } else if (video.webkitExitFullscreen) {
+        // iOS Safari
+        video.webkitExitFullscreen();
+      }
       setIsFullscreen(false);
     }
   };
@@ -605,6 +665,39 @@ const VideoPlayer = ({
     video.playbackRate = rate;
     setPlaybackRate(rate);
     setShowSettings(false);
+  };
+
+  // Double-tap handler for mobile devices
+  const handleVideoTap = () => {
+    const now = Date.now();
+    const tapInterval = 300; // milliseconds
+    
+    if (now - lastTapTimeRef.current < tapInterval) {
+      // Double-tap detected
+      tapCountRef.current++;
+      if (tapCountRef.current === 2) {
+        // On mobile, double-tap toggles fullscreen
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+          toggleFullscreen();
+        } else {
+          // On desktop, double-click toggles fullscreen
+          toggleFullscreen();
+        }
+        tapCountRef.current = 0;
+      }
+    } else {
+      // Single tap
+      tapCountRef.current = 1;
+      setTimeout(() => {
+        if (tapCountRef.current === 1) {
+          // Single tap action - toggle play/pause
+          togglePlay();
+        }
+        tapCountRef.current = 0;
+      }, tapInterval);
+    }
+    
+    lastTapTimeRef.current = now;
   };
 
   // Simple toggle function for torrent stats overlay
@@ -696,7 +789,8 @@ const VideoPlayer = ({
         ref={videoRef}
         src={src}
         className="video-element"
-        onClick={togglePlay}
+        onClick={handleVideoTap}
+        onDoubleClick={toggleFullscreen}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
       />
@@ -1067,8 +1161,12 @@ const VideoPlayer = ({
               <Download size={20} />
             </a>
 
-            <button onClick={toggleFullscreen} className="control-button">
-              <Maximize size={20} />
+            <button 
+              onClick={toggleFullscreen} 
+              className="control-button fullscreen-button"
+              title="Fullscreen (or double-tap video)"
+            >
+              {isFullscreen ? <Minimize2 size={20} /> : <Maximize size={20} />}
             </button>
           </div>
         </div>

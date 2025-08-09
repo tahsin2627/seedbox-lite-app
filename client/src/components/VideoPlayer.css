@@ -890,15 +890,58 @@
   }
 }
 
-/* Fullscreen styles */
-.video-player-container:fullscreen {
+/* Fullscreen styles with mobile support */
+.video-player-container:fullscreen,
+.video-player-container:-webkit-full-screen,
+.video-player-container:-moz-full-screen,
+.video-player-container:-ms-fullscreen {
   width: 100vw;
   height: 100vh;
+  border-radius: 0;
 }
 
-.video-player-container:fullscreen .video-element {
+.video-player-container:fullscreen .video-element,
+.video-player-container:-webkit-full-screen .video-element,
+.video-player-container:-moz-full-screen .video-element,
+.video-player-container:-ms-fullscreen .video-element {
   width: 100vw;
   height: 100vh;
+  object-fit: contain;
+}
+
+/* iOS Safari fullscreen video support */
+.video-element:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  background: #000;
+}
+
+/* Additional mobile fullscreen enhancements */
+@media (max-width: 768px) {
+  .video-player-container.fullscreen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999 !important;
+    border-radius: 0 !important;
+  }
+  
+  .video-player-container.fullscreen .video-element {
+    width: 100vw !important;
+    height: 100vh !important;
+    object-fit: contain !important;
+  }
+  
+  /* Ensure controls are visible in mobile fullscreen */
+  .video-player-container.fullscreen .video-controls {
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+  }
 }
 
 /* Resume Dialog */
