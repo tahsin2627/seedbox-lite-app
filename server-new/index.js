@@ -19,7 +19,7 @@ const config = {
   omdb: {
     apiKey: process.env.OMDB_API_KEY || '8265bd1c' // Free API key for development
   },
-  isDevelopment: process.env.NODE_ENV === 'development'
+  isDevelopment: process.env.NODE_ENV !== 'production'
 };
 
 const app = express();
@@ -630,14 +630,28 @@ const upload = multer({
 });
 
 // CORS Configuration
+const allowedOrigins = [
+  config.frontend.url,
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:3000'
+];
+
+// Add production domains if not in development
+if (!config.isDevelopment) {
+  allowedOrigins.push(
+    'https://seedbox.isalman.dev',
+    'https://seedbox-api.isalman.dev'
+  );
+}
+
+console.log('🌐 CORS allowed origins:', allowedOrigins);
+
 app.use(cors({
-  origin: [
-    config.frontend.url,
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:3000'
-  ],
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
