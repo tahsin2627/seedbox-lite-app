@@ -1116,7 +1116,21 @@ app.get('/api/torrents/:identifier/files/:fileIdx/stream', async (req, res) => {
     
     console.log(`🎬 Streaming: ${file.name} (${(file.length / 1024 / 1024).toFixed(1)} MB)`);
     
-    // Handle range requests
+    // Detect file type for proper MIME type
+    const ext = file.name.split('.').pop().toLowerCase();
+    const mimeTypes = {
+      'mp4': 'video/mp4',
+      'mkv': 'video/x-matroska',
+      'avi': 'video/x-msvideo',
+      'mov': 'video/quicktime',
+      'wmv': 'video/x-ms-wmv',
+      'flv': 'video/x-flv',
+      'webm': 'video/webm',
+      'm4v': 'video/mp4'
+    };
+    const contentType = mimeTypes[ext] || 'video/mp4';
+    
+    // Handle range requests (crucial for mobile video playback)
     const range = req.headers.range;
     if (range) {
       const parts = range.replace(/bytes=/, "").split("-");
@@ -1128,7 +1142,13 @@ app.get('/api/torrents/:identifier/files/:fileIdx/stream', async (req, res) => {
         'Content-Range': `bytes ${start}-${end}/${file.length}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
-        'Content-Type': 'video/mp4'
+        'Content-Type': contentType,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Range, Content-Type',
+        'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
       });
       
       const stream = file.createReadStream({ start, end });
@@ -1136,7 +1156,14 @@ app.get('/api/torrents/:identifier/files/:fileIdx/stream', async (req, res) => {
     } else {
       res.writeHead(200, {
         'Content-Length': file.length,
-        'Content-Type': 'video/mp4'
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Range, Content-Type',
+        'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
       });
       file.createReadStream().pipe(res);
     }

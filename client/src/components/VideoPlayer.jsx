@@ -469,6 +469,66 @@ const VideoPlayer = ({
     };
   }, [src, initialTime, onTimeUpdate, onProgress, updateBufferedProgress, torrentHash, fileIndex, title, hasShownResumeDialog, hasAppliedInitialTime]);
 
+  // Mobile video initialization
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      // Mobile-specific video event handlers
+      const handleLoadStart = () => {
+        console.log('📱 Mobile: Video load started');
+        setIsLoading(true);
+      };
+
+      const handleCanPlay = () => {
+        console.log('📱 Mobile: Video can play');
+        setIsLoading(false);
+      };
+
+      const handleWaiting = () => {
+        console.log('📱 Mobile: Video waiting for data');
+        setIsLoading(true);
+      };
+
+      const handleStalled = () => {
+        console.log('📱 Mobile: Video stalled, retrying...');
+        setIsLoading(true);
+        // On mobile, try to reload the video source if it stalls
+        setTimeout(() => {
+          if (video.paused && !isPlaying) {
+            video.load();
+          }
+        }, 2000);
+      };
+
+      const handleError = (e) => {
+        console.error('📱 Mobile video error:', e);
+        setIsLoading(false);
+        // Try to recover from error
+        setTimeout(() => {
+          video.load();
+        }, 1000);
+      };
+
+      video.addEventListener('loadstart', handleLoadStart);
+      video.addEventListener('canplay', handleCanPlay);
+      video.addEventListener('waiting', handleWaiting);
+      video.addEventListener('stalled', handleStalled);
+      video.addEventListener('error', handleError);
+
+      return () => {
+        video.removeEventListener('loadstart', handleLoadStart);
+        video.removeEventListener('canplay', handleCanPlay);
+        video.removeEventListener('waiting', handleWaiting);
+        video.removeEventListener('stalled', handleStalled);
+        video.removeEventListener('error', handleError);
+      };
+    }
+  }, [src, isPlaying]);
+
   // Fullscreen event listeners for mobile compatibility
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -481,21 +541,76 @@ const VideoPlayer = ({
       setIsFullscreen(isCurrentlyFullscreen);
     };
 
+    // iOS Safari specific fullscreen events
+    const handleWebkitFullscreenChange = () => {
+      const video = videoRef.current;
+      if (video) {
+        const isVideoFullscreen = video.webkitDisplayingFullscreen;
+        setIsFullscreen(isVideoFullscreen);
+      }
+    };
+
     // Add event listeners for all browser prefixes
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    // iOS Safari specific
+    const video = videoRef.current;
+    if (video) {
+      video.addEventListener('webkitbeginfullscreen', () => setIsFullscreen(true));
+      video.addEventListener('webkitendfullscreen', () => setIsFullscreen(false));
+    }
 
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+      
+      if (video) {
+        video.removeEventListener('webkitbeginfullscreen', () => setIsFullscreen(true));
+        video.removeEventListener('webkitendfullscreen', () => setIsFullscreen(false));
+      }
     };
   }, []);
 
-  // Optimized play/pause for instant streaming
+  // Mobile viewport optimization for fullscreen
+  useEffect(() => {
+    const optimizeMobileViewport = () => {
+      // Ensure viewport meta tag allows user scaling for fullscreen
+      let viewportMeta = document.querySelector('meta[name="viewport"]');
+      if (!viewportMeta) {
+        viewportMeta = document.createElement('meta');
+        viewportMeta.name = 'viewport';
+        document.head.appendChild(viewportMeta);
+      }
+      
+      if (isFullscreen) {
+        // Optimize for fullscreen - allow zooming and remove address bar
+        viewportMeta.content = 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, minimal-ui, viewport-fit=cover';
+        
+        // Additional mobile Safari optimizations
+        if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+          // Force viewport recalculation
+          window.scrollTo(0, 1);
+          setTimeout(() => {
+            window.scrollTo(0, 0);
+            // Trigger a resize to ensure fullscreen
+            window.dispatchEvent(new Event('resize'));
+          }, 100);
+        }
+      } else {
+        // Reset viewport for normal viewing
+        viewportMeta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+      }
+    };
+
+    optimizeMobileViewport();
+  }, [isFullscreen]);
+
+  // Optimized play/pause for mobile and instant streaming
   const togglePlay = async () => {
     if (!videoRef.current) return;
 
@@ -505,65 +620,124 @@ const VideoPlayer = ({
         setIsPlaying(false);
       } else {
         const video = videoRef.current;
-        const buffered = video.buffered;
-        const currentTime = video.currentTime;
         
-        // Check for instant play capability
-        let canPlayInstantly = false;
+        // Mobile-specific optimizations
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
-        if (buffered.length > 0) {
-          for (let i = 0; i < buffered.length; i++) {
-            const start = buffered.start(i);
-            const end = buffered.end(i);
+        if (isMobile) {
+          // For mobile devices, ensure we have user interaction before playing
+          try {
+            // Start loading the video if not already loaded
+            if (video.readyState < 2) { // HAVE_CURRENT_DATA
+              video.load();
+              setIsLoading(true);
+              
+              // Wait for enough data to start playing
+              await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error('Timeout')), 10000);
+                
+                const onCanPlay = () => {
+                  clearTimeout(timeout);
+                  video.removeEventListener('canplay', onCanPlay);
+                  video.removeEventListener('error', onError);
+                  setIsLoading(false);
+                  resolve();
+                };
+                
+                const onError = (e) => {
+                  clearTimeout(timeout);
+                  video.removeEventListener('canplay', onCanPlay);
+                  video.removeEventListener('error', onError);
+                  setIsLoading(false);
+                  reject(e);
+                };
+                
+                video.addEventListener('canplay', onCanPlay);
+                video.addEventListener('error', onError);
+              });
+            }
             
-            // Check if current position has any buffered data
-            if (start <= currentTime && end > currentTime) {
-              // For instant streaming, require minimal buffer (1 second)
-              if (end - currentTime >= 1) {
-                canPlayInstantly = true;
-                break;
+            // Play with mobile-specific handling
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+              await playPromise;
+              setIsPlaying(true);
+            }
+          } catch (error) {
+            console.warn('Mobile playback failed, trying fallback:', error);
+            setIsLoading(false);
+            
+            // Fallback: simple play attempt
+            try {
+              await video.play();
+              setIsPlaying(true);
+            } catch (fallbackError) {
+              console.error('Video playback failed:', fallbackError);
+              setIsLoading(false);
+            }
+          }
+        } else {
+          // Desktop playback with buffering check
+          const buffered = video.buffered;
+          const currentTime = video.currentTime;
+          
+          // Check for instant play capability
+          let canPlayInstantly = false;
+          
+          if (buffered.length > 0) {
+            for (let i = 0; i < buffered.length; i++) {
+              const start = buffered.start(i);
+              const end = buffered.end(i);
+              
+              // Check if current position has any buffered data
+              if (start <= currentTime && end > currentTime) {
+                // For instant streaming, require minimal buffer (1 second)
+                if (end - currentTime >= 1) {
+                  canPlayInstantly = true;
+                  break;
+                }
               }
             }
           }
-        }
-        
-        // Instant play logic - be aggressive about starting playback
-        if (canPlayInstantly || bufferHealth > 30 || instantPlayEnabled) {
-          try {
-            await video.play();
-            setIsPlaying(true);
-            setIsLoading(false);
-          } catch (playError) {
-            console.log('Instant play failed, buffering...', playError);
+          
+          // Desktop instant play logic
+          if (canPlayInstantly || bufferHealth > 30 || instantPlayEnabled) {
+            try {
+              await video.play();
+              setIsPlaying(true);
+              setIsLoading(false);
+            } catch (playError) {
+              console.log('Instant play failed, buffering...', playError);
+              setIsLoading(true);
+              // Retry after a short buffer
+              setTimeout(async () => {
+                try {
+                  await video.play();
+                  setIsPlaying(true);
+                  setIsLoading(false);
+                } catch (retryError) {
+                  console.log('Retry play failed:', retryError);
+                  setIsLoading(false);
+                }
+              }, 1000);
+            }
+          } else {
+            // Show loading state while building initial buffer
             setIsLoading(true);
-            // Retry after a short buffer
-            setTimeout(async () => {
-              try {
-                await video.play();
-                setIsPlaying(true);
-                setIsLoading(false);
-              } catch (retryError) {
-                console.log('Retry play failed:', retryError);
-                setIsLoading(false);
+            console.log('Building buffer for smooth playback...');
+            
+            // Try to play after minimal buffer is ready
+            setTimeout(() => {
+              if (videoRef.current && !isPlaying) {
+                videoRef.current.play().then(() => {
+                  setIsPlaying(true);
+                  setIsLoading(false);
+                }).catch(() => {
+                  setIsLoading(false);
+                });
               }
             }, 1000);
           }
-        } else {
-          // Show loading state while building initial buffer
-          setIsLoading(true);
-          console.log('Building buffer for smooth playback...');
-          
-          // Try to play after minimal buffer is ready
-          setTimeout(() => {
-            if (videoRef.current && !isPlaying) {
-              videoRef.current.play().then(() => {
-                setIsPlaying(true);
-                setIsLoading(false);
-              }).catch(() => {
-                setIsLoading(false);
-              });
-            }
-          }, 1000);
         }
       }
     } catch (error) {
@@ -616,27 +790,47 @@ const VideoPlayer = ({
     const container = videoRef.current.parentElement;
     const video = videoRef.current;
     
+    // Detect mobile devices
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                    ('ontouchstart' in window) || 
+                    (navigator.maxTouchPoints > 0);
+    
     if (!isFullscreen) {
       // Try to enter fullscreen
-      if (container.requestFullscreen) {
-        container.requestFullscreen();
-      } else if (container.webkitRequestFullscreen) {
-        // Safari
-        container.webkitRequestFullscreen();
-      } else if (container.mozRequestFullScreen) {
-        // Firefox
-        container.mozRequestFullScreen();
-      } else if (container.msRequestFullscreen) {
-        // IE/Edge
-        container.msRequestFullscreen();
-      } else if (video.webkitEnterFullscreen) {
-        // iOS Safari - use video element fullscreen
-        video.webkitEnterFullscreen();
-      } else if (video.requestFullscreen) {
-        // Fallback to video element
-        video.requestFullscreen();
+      if (isMobile) {
+        // For mobile devices, especially iOS Safari
+        if (video.webkitEnterFullscreen) {
+          // iOS Safari - use video element fullscreen (hides address bar)
+          video.webkitEnterFullscreen();
+        } else if (video.requestFullscreen) {
+          // Android Chrome/Firefox
+          video.requestFullscreen();
+        } else if (container.webkitRequestFullscreen) {
+          // Fallback for mobile Safari
+          container.webkitRequestFullscreen();
+        } else {
+          // Fallback: simulate fullscreen with CSS
+          setIsFullscreen(true);
+          // Trigger viewport change to hide address bar
+          window.scrollTo(0, 1);
+          setTimeout(() => window.scrollTo(0, 0), 100);
+        }
+      } else {
+        // Desktop fullscreen
+        if (container.requestFullscreen) {
+          container.requestFullscreen();
+        } else if (container.webkitRequestFullscreen) {
+          container.webkitRequestFullscreen();
+        } else if (container.mozRequestFullScreen) {
+          container.mozRequestFullScreen();
+        } else if (container.msRequestFullscreen) {
+          container.msRequestFullscreen();
+        }
       }
-      setIsFullscreen(true);
+      
+      if (!isMobile || !video.webkitEnterFullscreen) {
+        setIsFullscreen(true);
+      }
     } else {
       // Try to exit fullscreen
       if (document.exitFullscreen) {
@@ -650,8 +844,14 @@ const VideoPlayer = ({
       } else if (video.webkitExitFullscreen) {
         // iOS Safari
         video.webkitExitFullscreen();
+      } else {
+        // CSS fullscreen fallback
+        setIsFullscreen(false);
       }
-      setIsFullscreen(false);
+      
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        setIsFullscreen(false);
+      }
     }
   };
 
@@ -770,7 +970,7 @@ const VideoPlayer = ({
 
   return (
     <div 
-      className={`video-player-container ${isFullscreen ? 'fullscreen' : ''}`}
+      className={`video-player-container ${isFullscreen ? 'fullscreen' : ''} ${isFullscreen && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 'mobile-fullscreen' : ''}`}
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => isPlaying && setShowControls(false)}
     >
@@ -793,6 +993,14 @@ const VideoPlayer = ({
         onDoubleClick={toggleFullscreen}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
+        playsInline={false}
+        webkit-playsinline="false"
+        controls={false}
+        preload="none"
+        crossOrigin="anonymous"
+        muted={false}
+        autoPlay={false}
+        poster=""
       />
       
       {isLoading && (

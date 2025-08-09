@@ -917,6 +917,67 @@
   background: #000;
 }
 
+/* Mobile Safari specific fullscreen optimizations */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari */
+  .video-element {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Force native fullscreen behavior */
+  .video-element::-webkit-media-controls-fullscreen-button {
+    display: none;
+  }
+  
+  .video-player-container.fullscreen {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 99999 !important;
+    background: #000 !important;
+  }
+  
+  .video-player-container.fullscreen .video-element {
+    width: 100vw !important;
+    height: 100vh !important;
+    object-fit: contain !important;
+    background: #000 !important;
+  }
+}
+
+/* Force mobile browsers to hide address bar in fullscreen */
+.video-player-container.mobile-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important; /* Dynamic viewport height for mobile */
+  z-index: 99999 !important;
+  border-radius: 0 !important;
+  background: #000 !important;
+  /* Mobile Safari optimizations */
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.video-player-container.mobile-fullscreen .video-element {
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100vh !important;
+  max-height: 100dvh !important;
+  object-fit: contain !important;
+  background: #000 !important;
+}
+
 /* Additional mobile fullscreen enhancements */
 @media (max-width: 768px) {
   .video-player-container.fullscreen {
@@ -941,6 +1002,39 @@
     bottom: 0 !important;
     left: 0 !important;
     right: 0 !important;
+  }
+  
+  /* Enhanced fullscreen button for mobile */
+  .fullscreen-button {
+    background: rgba(0, 0, 0, 0.8) !important;
+    border: 2px solid #4ade80 !important;
+    color: #4ade80 !important;
+    font-weight: bold !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    border-radius: 50% !important;
+    position: relative !important;
+  }
+  
+  .fullscreen-button:hover {
+    background: rgba(74, 222, 128, 0.2) !important;
+    transform: scale(1.1) !important;
+  }
+  
+  .fullscreen-button:active {
+    transform: scale(0.95) !important;
+    background: rgba(74, 222, 128, 0.4) !important;
+  }
+  
+  /* Add visual feedback for double-tap */
+  .video-element {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
   }
 }
 
