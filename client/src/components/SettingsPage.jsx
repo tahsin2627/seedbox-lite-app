@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Trash2, Download, Globe, Shield, HardDrive, ExternalLink } from 'lucide-react';
+import { Settings, Trash2, Download, Globe, Shield, HardDrive, ExternalLink, LogOut } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { config } from '../config/environment';
+import { useAuth } from '../context/AuthContext';
 import progressService from '../services/progressService';
 import './SettingsPage.css';
 
 const SettingsPage = () => {
+  const { logout } = useAuth();
   const [settings, setSettings] = useState({
     downloadPath: '/tmp/seedbox-downloads',
     maxConnections: 50,
@@ -142,6 +144,12 @@ const SettingsPage = () => {
     };
     reader.readAsText(file);
     event.target.value = ''; // Reset file input
+  };
+
+  const handleLogout = () => {
+    if (window.confirm('Are you sure you want to logout? You will need to enter the password again to access the dashboard.')) {
+      logout();
+    }
   };
 
   return (
@@ -324,6 +332,22 @@ const SettingsPage = () => {
             <Trash2 size={16} />
             Clear All Data
           </button>
+        </div>
+      </div>
+
+      {/* Security */}
+      <div className="settings-section">
+        <h2>🔐 Security</h2>
+        <div className="security-section">
+          <div className="security-info">
+            <p>Your authentication is stored locally on this device for convenience. You can logout to require password entry on next access.</p>
+          </div>
+          <div className="action-buttons">
+            <button onClick={handleLogout} className="action-button danger">
+              <LogOut size={16} />
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 

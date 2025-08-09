@@ -650,6 +650,35 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Authentication endpoint
+app.post('/api/auth/login', (req, res) => {
+  const { password } = req.body;
+  const correctPassword = process.env.ACCESS_PASSWORD || 'seedbox123';
+  
+  console.log(`🔐 Login attempt with password: ${password ? '[PROVIDED]' : '[MISSING]'}`);
+  
+  if (!password) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Password is required' 
+    });
+  }
+  
+  if (password === correctPassword) {
+    console.log('✅ Authentication successful');
+    return res.json({ 
+      success: true, 
+      message: 'Authentication successful' 
+    });
+  } else {
+    console.log('❌ Authentication failed - incorrect password');
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Invalid password' 
+    });
+  }
+});
+
 // UNIVERSAL ADD TORRENT - Always succeeds
 app.post('/api/torrents', async (req, res) => {
   const { torrentId } = req.body;
@@ -1254,40 +1283,19 @@ app.delete('/api/torrents', (req, res) => {
 // Cache stats
 app.get('/api/cache/stats', async (req, res) => {
   try {
-    const fs = require('fs').promises;
-    const path = require('path');
+    const activeTorrents = client.torrents.length;
     
-    const activeTorrents = Object.keys(torrents).length;
-    
-    // Function to get directory size
-    const getDirectorySize = async (dirPath) => {
-      let size = 0;
-      try {
-        const items = await fs.readdir(dirPath);
-        for (const item of items) {
-          const itemPath = path.join(dirPath, item);
-          const stats = await fs.stat(itemPath);
-          if (stats.isDirectory()) {
-            size += await getDirectorySize(itemPath);
-          } else {
-            size += stats.size;
-          }
-        }
-      } catch (error) {
-        console.warn('Error calculating directory size:', error.message);
-      }
-      return size;
-    };
-    
-    // Calculate actual cache size from download directory
-    const downloadDir = path.join(__dirname, 'downloads');
+    // Calculate actual cache size from WebTorrent client data
     let cacheSize = 0;
-    try {
-      cacheSize = await getDirectorySize(downloadDir);
-    } catch (error) {
-      console.warn('Could not calculate cache size:', error.message);
-    }
+    let downloadedBytes = 0;
     
+    client.torrents.forEach(torrent => {
+      // Add total size of each torrent
+      cacheSize += torrent.length || 0;
+      // Add downloaded bytes
+      downloadedBytes += torrent.downloaded || 0;
+    });
+
     const formatBytes = (bytes) => {
       if (bytes === 0) return '0 B';
       const k = 1024;
@@ -1295,14 +1303,17 @@ app.get('/api/cache/stats', async (req, res) => {
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
-    
+
     const stats = {
-      totalSizeFormatted: formatBytes(cacheSize),
+      totalSizeFormatted: formatBytes(downloadedBytes), // Use actual downloaded data
+      totalSize: downloadedBytes,
       activeTorrents,
-      cacheSize: cacheSize
+      cacheSize: downloadedBytes, // Use downloaded bytes for cache calculation
+      totalTorrentSize: cacheSize, // Total size of all torrents
+      totalTorrentSizeFormatted: formatBytes(cacheSize)
     };
-    
-    console.log(`📊 Cache stats: ${formatBytes(cacheSize)} (${activeTorrents} torrents)`);
+
+    console.log(`📊 Cache stats: ${formatBytes(downloadedBytes)} downloaded (${activeTorrents} torrents, ${formatBytes(cacheSize)} total)`);
     res.json(stats);
   } catch (error) {
     console.error('Error getting cache stats:', error);
