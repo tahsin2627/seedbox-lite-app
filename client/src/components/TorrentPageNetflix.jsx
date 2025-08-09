@@ -78,12 +78,20 @@ const TorrentPageNetflix = () => {
       
       // Load progress only once on mount
       const allProgress = progressService.getAllProgress();
+      console.log('📊 All progress data:', allProgress);
+      
       const torrentProgress = {};
       Object.values(allProgress).forEach(progress => {
         if (progress.torrentHash === torrentHash) {
           torrentProgress[progress.fileIndex] = progress;
         }
       });
+      console.log('📊 Filtered progress for torrent:', torrentHash, torrentProgress);
+      
+      // Also test direct progress retrieval for file 0
+      const directProgress = progressService.getProgress(torrentHash, 0);
+      console.log('📊 Direct progress for file 0:', directProgress);
+      
       setRecentProgress(torrentProgress);
       
       // Only run progress fetching if no video is selected
@@ -147,8 +155,16 @@ const TorrentPageNetflix = () => {
 
   if (selectedVideo) {
     const videoKey = `${torrentHash}-${selectedVideo.index}-${selectedVideo.name}`;
-    // Capture initial time when video is first selected and don't change it
-    const initialProgress = recentProgress[selectedVideo.index]?.currentTime || 0;
+    
+    // Try multiple methods to get progress
+    const progressFromState = recentProgress[selectedVideo.index]?.currentTime || 0;
+    const progressFromService = progressService.getProgress(torrentHash, selectedVideo.index);
+    const directServiceTime = progressFromService?.currentTime || 0;
+    
+    // Use the direct service method as primary
+    const initialProgress = directServiceTime || progressFromState;
+    
+    console.log('🎬 Video selected:', selectedVideo.name, 'Resume from:', initialProgress + 's');
     
     return (
       <VideoPlayer
@@ -156,13 +172,9 @@ const TorrentPageNetflix = () => {
         src={`${config.apiBaseUrl}/api/torrents/${torrentHash}/files/${selectedVideo.index}/stream`}
         title={selectedVideo.name}
         onClose={() => setSelectedVideo(null)}
-        onTimeUpdate={(time) => {
-          // Update progress service without triggering re-renders
-          progressService.updateProgress(torrentHash, selectedVideo.index, {
-            currentTime: time,
-            duration: selectedVideo.duration || 0
-          });
-          // Don't call setRecentProgress here to avoid re-rendering
+        onTimeUpdate={() => {
+          // The VideoPlayer itself handles saving progress with correct duration
+          // We don't need to save it here since VideoPlayer saves every 5 seconds
         }}
         initialTime={initialProgress}
         torrentHash={torrentHash}
@@ -229,7 +241,7 @@ const TorrentPageNetflix = () => {
                   onClick={() => setSelectedVideo(mainVideoFile)}
                 >
                   <Play size={20} />
-                  Play
+                  {recentProgress[mainVideoFile.index] ? 'Resume' : 'Play'}
                 </button>
               )}
               

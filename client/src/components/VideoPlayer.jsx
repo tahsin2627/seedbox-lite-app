@@ -62,6 +62,7 @@ const VideoPlayer = ({
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [resumeData, setResumeData] = useState(null);
   const [hasShownResumeDialog, setHasShownResumeDialog] = useState(false);
+  const [hasAppliedInitialTime, setHasAppliedInitialTime] = useState(false);
   
   // Subtitle/CC support
   const [availableSubtitles, setAvailableSubtitles] = useState([]);
@@ -386,19 +387,24 @@ const VideoPlayer = ({
     const video = videoRef.current;
     if (!video) return;
 
-    // Set initial time if provided
-    if (initialTime > 0) {
-      video.currentTime = initialTime;
-    }
-
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
       setIsLoading(false);
       
+      // Set initial time after metadata is loaded
+      if (initialTime > 0 && !hasAppliedInitialTime) {
+        console.log('⏰ Resuming video at:', initialTime + 's');
+        video.currentTime = initialTime;
+        setCurrentTime(initialTime);
+        setHasAppliedInitialTime(true);
+      }
+      
       // Check for saved progress and show resume dialog
-      if (torrentHash && fileIndex !== null && !hasShownResumeDialog) {
+      // Only show dialog if no initialTime was provided (auto-resume)
+      if (torrentHash && fileIndex !== null && !hasShownResumeDialog && initialTime === 0) {
         const resumeInfo = progressService.shouldResumeVideo(torrentHash, fileIndex);
         if (resumeInfo) {
+          console.log('📋 Showing resume dialog for:', resumeInfo);
           setResumeData(resumeInfo);
           setShowResumeDialog(true);
         }
@@ -432,7 +438,16 @@ const VideoPlayer = ({
     };
 
     const handleWaiting = () => setIsLoading(true);
-    const handleCanPlay = () => setIsLoading(false);
+    const handleCanPlay = () => {
+      setIsLoading(false);
+      // Only try setting initial time when the video can play if we haven't done it yet
+      if (initialTime > 0 && !hasAppliedInitialTime && Math.abs(video.currentTime - initialTime) > 1) {
+        console.log('🎬 CanPlay: Resuming video at:', initialTime + 's');
+        video.currentTime = initialTime;
+        setCurrentTime(initialTime);
+        setHasAppliedInitialTime(true);
+      }
+    };
     const handleCanPlayThrough = () => setIsLoading(false);
 
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -450,7 +465,7 @@ const VideoPlayer = ({
       video.removeEventListener('canplay', handleCanPlay);
       video.removeEventListener('canplaythrough', handleCanPlayThrough);
     };
-  }, [src, initialTime, onTimeUpdate, onProgress, updateBufferedProgress, torrentHash, fileIndex, title, hasShownResumeDialog]);
+  }, [src, initialTime, onTimeUpdate, onProgress, updateBufferedProgress, torrentHash, fileIndex, title, hasShownResumeDialog, hasAppliedInitialTime]);
 
   // Optimized play/pause for instant streaming
   const togglePlay = async () => {
