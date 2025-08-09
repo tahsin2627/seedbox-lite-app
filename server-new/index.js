@@ -298,7 +298,37 @@ const loadTorrentFromId = (torrentId) => {
       console.log(`🧲 Constructed magnet URI from hash: ${magnetUri}`);
     }
     
-    const torrent = client.add(magnetUri);
+    let torrent;
+    
+    try {
+      torrent = client.add(magnetUri);
+    } catch (addError) {
+      // Handle duplicate torrent error from WebTorrent client
+      if (addError.message && addError.message.includes('duplicate')) {
+        console.log(`🔍 Duplicate torrent detected in WebTorrent client, finding existing`);
+        
+        // Extract hash from the torrent ID
+        let hash = torrentId;
+        if (torrentId.startsWith('magnet:')) {
+          const match = torrentId.match(/xt=urn:btih:([a-fA-F0-9]{40})/);
+          if (match) hash = match[1];
+        }
+        
+        // Find the existing torrent in the client
+        const existingTorrent = client.torrents.find(t => 
+          t.infoHash.toLowerCase() === hash.toLowerCase()
+        );
+        
+        if (existingTorrent) {
+          console.log(`✅ Found existing torrent in client: ${existingTorrent.name || existingTorrent.infoHash}`);
+          resolve(existingTorrent);
+          return;
+        }
+      }
+      
+      reject(addError);
+      return;
+    }
     
     let resolved = false;
     
@@ -472,6 +502,7 @@ app.post('/api/torrents', async (req, res) => {
       try {
         const newTorrent = await loadTorrentFromId(torrentId);
         return res.json({ 
+          success: true,
           infoHash: newTorrent.infoHash,
           name: newTorrent.name || 'Loading...',
           size: newTorrent.length || 0,
@@ -499,13 +530,28 @@ app.post('/api/torrents', async (req, res) => {
           );
           
           if (existingTorrent) {
+            console.log(`✅ Found existing torrent: ${existingTorrent.name}`);
             return res.json({ 
+              success: true,
               infoHash: existingTorrent.infoHash,
               name: existingTorrent.name || 'Loading...',
               size: existingTorrent.length || 0,
-              status: 'existing'
+              status: 'existing',
+              message: 'Torrent already added'
             });
           }
+          
+          // If we can't find the existing torrent, still return success
+          // This handles edge cases where duplicate is detected but torrent isn't in our list yet
+          console.log(`✅ Duplicate detected but not found in list, assuming success`);
+          return res.json({ 
+            success: true,
+            infoHash: hash,
+            name: 'Duplicate torrent',
+            size: 0,
+            status: 'duplicate',
+            message: 'Torrent already exists in the system'
+          });
         }
         
         throw loadError;
@@ -513,6 +559,7 @@ app.post('/api/torrents', async (req, res) => {
     }
     
     res.json({ 
+      success: true,
       infoHash: torrent.infoHash,
       name: torrent.name || 'Loading...',
       size: torrent.length || 0,
@@ -545,7 +592,36 @@ app.post('/api/torrents/upload', upload.single('torrentFile'), async (req, res) 
     
     // Load the torrent using the buffer
     const torrent = await new Promise((resolve, reject) => {
-      const loadedTorrent = client.add(torrentBuffer);
+      let loadedTorrent;
+      
+      try {
+        loadedTorrent = client.add(torrentBuffer);
+      } catch (addError) {
+        // Handle duplicate torrent in file upload
+        if (addError.message && addError.message.includes('duplicate')) {
+          console.log(`🔍 Duplicate torrent file detected, finding existing`);
+          
+          // Parse the torrent buffer to get the info hash
+          const parseTorrent = require('parse-torrent');
+          try {
+            const parsed = parseTorrent(torrentBuffer);
+            const existingTorrent = client.torrents.find(t => 
+              t.infoHash.toLowerCase() === parsed.infoHash.toLowerCase()
+            );
+            
+            if (existingTorrent) {
+              console.log(`✅ Found existing torrent from file: ${existingTorrent.name || existingTorrent.infoHash}`);
+              resolve(existingTorrent);
+              return;
+            }
+          } catch (parseError) {
+            console.error(`❌ Error parsing torrent for duplicate check:`, parseError.message);
+          }
+        }
+        
+        reject(addError);
+        return;
+      }
       
       let resolved = false;
       
@@ -572,6 +648,29 @@ app.post('/api/torrents/upload', upload.single('torrentFile'), async (req, res) 
         if (resolved) return;
         resolved = true;
         console.error(`❌ Error loading uploaded torrent:`, err.message);
+        
+        // Handle duplicate error in event handler too
+        if (err.message && err.message.includes('duplicate')) {
+          console.log(`🔍 Duplicate torrent detected in error handler`);
+          
+          // Try to find existing torrent and return it
+          const parseTorrent = require('parse-torrent');
+          try {
+            const parsed = parseTorrent(torrentBuffer);
+            const existingTorrent = client.torrents.find(t => 
+              t.infoHash.toLowerCase() === parsed.infoHash.toLowerCase()
+            );
+            
+            if (existingTorrent) {
+              console.log(`✅ Found existing torrent in error handler: ${existingTorrent.name}`);
+              resolve(existingTorrent);
+              return;
+            }
+          } catch (parseError) {
+            console.error(`❌ Error parsing in error handler:`, parseError.message);
+          }
+        }
+        
         reject(err);
       });
       
@@ -588,6 +687,7 @@ app.post('/api/torrents/upload', upload.single('torrentFile'), async (req, res) 
     fs.unlinkSync(torrentPath);
     
     res.json({
+      success: true,
       infoHash: torrent.infoHash,
       name: torrent.name,
       size: torrent.length,
@@ -833,6 +933,69 @@ app.get('/api/torrents/:identifier/files/:fileIdx/stream', async (req, res) => {
   } catch (error) {
     console.error(`❌ Universal streaming failed:`, error.message);
     res.status(500).json({ error: 'Streaming failed: ' + error.message });
+  }
+});
+
+// UNIVERSAL DOWNLOAD - Download files with proper headers
+app.get('/api/torrents/:identifier/files/:fileIdx/download', async (req, res) => {
+  const { identifier, fileIdx } = req.params;
+  console.log(`📥 UNIVERSAL DOWNLOAD: ${identifier}/${fileIdx}`);
+  
+  try {
+    const torrent = await universalTorrentResolver(identifier);
+    
+    if (!torrent) {
+      return res.status(404).json({ error: 'Torrent not found for download' });
+    }
+    
+    const file = torrent.files[fileIdx];
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    // Ensure torrent is active and file is selected
+    torrent.resume();
+    file.select();
+    
+    console.log(`📥 Downloading: ${file.name} (${(file.length / 1024 / 1024).toFixed(1)} MB)`);
+    
+    // Set download headers
+    const filename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Length', file.length);
+    res.setHeader('Accept-Ranges', 'bytes');
+    
+    // Handle range requests for resume capability
+    const range = req.headers.range;
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : file.length - 1;
+      const chunkSize = (end - start) + 1;
+      
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${file.length}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Type': 'application/octet-stream'
+      });
+      
+      const stream = file.createReadStream({ start, end });
+      stream.pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': file.length,
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Type': 'application/octet-stream'
+      });
+      file.createReadStream().pipe(res);
+    }
+    
+  } catch (error) {
+    console.error(`❌ Universal download failed:`, error.message);
+    res.status(500).json({ error: 'Download failed: ' + error.message });
   }
 });
 

@@ -120,6 +120,16 @@ const TorrentPageNetflix = () => {
     return parseFloat((bytesPerSecond / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
+  const handleDownload = (fileIndex) => {
+    const downloadUrl = config.getDownloadUrl(torrentHash, fileIndex);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = files[fileIndex]?.name || 'download';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (loading) {
     return (
       <div className="netflix-page">
@@ -245,6 +255,17 @@ const TorrentPageNetflix = () => {
                 </button>
               )}
               
+              {mainVideoFile && (
+                <button 
+                  className="netflix-secondary-btn"
+                  onClick={() => handleDownload(mainVideoFile.index)}
+                  title="Download video"
+                >
+                  <Download size={20} />
+                  Download
+                </button>
+              )}
+              
               <button className="netflix-secondary-btn">
                 <Plus size={20} />
                 My List
@@ -320,6 +341,16 @@ const TorrentPageNetflix = () => {
                         </p>
                       )}
                     </div>
+                    
+                    <div className="netflix-episode-actions">
+                      <button 
+                        className="netflix-episode-download"
+                        onClick={() => handleDownload(file.index)}
+                        title="Download episode"
+                      >
+                        <Download size={18} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -333,7 +364,12 @@ const TorrentPageNetflix = () => {
               <div className="netflix-files">
                 {otherFiles.map(file => (
                   <div key={file.index} className="netflix-file">
-                    <div className="netflix-file-icon">
+                    <div 
+                      className="netflix-file-icon"
+                      onClick={() => handleDownload(file.index)}
+                      style={{ cursor: 'pointer' }}
+                      title="Download file"
+                    >
                       <Download size={16} />
                     </div>
                     <div className="netflix-file-info">
