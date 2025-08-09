@@ -318,6 +318,12 @@
   min-height: 100vh;
   overflow-x: hidden;
   width: 100%;
+  margin-left: 300px; /* Account for sidebar width + spacing */
+}
+
+/* When sidebar is collapsed, main content expands */
+.main-content.expanded {
+  margin-left: 100px; /* Account for collapsed sidebar width + spacing */
 }
 
 /* Mobile Overlay */
@@ -476,12 +482,12 @@
   }
 
   .main-content {
-    margin-left: 280px; /* Account for sidebar width */
+    margin-left: 300px; /* Account for sidebar width + spacing */
     margin-top: 0;
   }
 
   .main-content.expanded {
-    margin-left: 80px; /* Account for collapsed sidebar width */
+    margin-left: 100px; /* Account for collapsed sidebar width + spacing */
   }
 
   .mobile-overlay {

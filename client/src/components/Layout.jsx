@@ -34,7 +34,7 @@ const Layout = () => {
         const diskData = await diskResponse.json().catch(() => ({ percentage: 0, total: 0 }));
 
         // Calculate cache usage percentage relative to total disk space
-        const cacheSize = stats.downloadedBytes || 0;
+        const cacheSize = stats.cacheSize || 0;
         const totalDisk = diskData.total || 1;
         const cacheUsagePercentage = totalDisk > 0 ? (cacheSize / totalDisk) * 100 : 0;
 

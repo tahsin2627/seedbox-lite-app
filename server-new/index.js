@@ -1290,9 +1290,9 @@ app.get('/api/cache/stats', async (req, res) => {
     let downloadedBytes = 0;
     
     client.torrents.forEach(torrent => {
-      // Add total size of each torrent
+      // Add total size of each torrent (this is the actual cache size)
       cacheSize += torrent.length || 0;
-      // Add downloaded bytes
+      // Add downloaded bytes (for information)
       downloadedBytes += torrent.downloaded || 0;
     });
 
@@ -1306,20 +1306,21 @@ app.get('/api/cache/stats', async (req, res) => {
 
     // Cache limit (5GB default)
     const cacheLimitBytes = 5 * 1024 * 1024 * 1024; // 5GB in bytes
-    const usagePercentage = cacheLimitBytes > 0 ? (downloadedBytes / cacheLimitBytes) * 100 : 0;
+    const usagePercentage = cacheLimitBytes > 0 ? (cacheSize / cacheLimitBytes) * 100 : 0;
 
     const stats = {
-      totalSizeFormatted: formatBytes(downloadedBytes), // Use actual downloaded data
-      totalSize: downloadedBytes,
+      totalSizeFormatted: formatBytes(cacheSize), // Use total cache size (torrent lengths)
+      totalSize: cacheSize,
       activeTorrents,
-      cacheSize: downloadedBytes, // Use downloaded bytes for cache calculation
-      totalTorrentSize: cacheSize, // Total size of all torrents
+      cacheSize: cacheSize, // Total torrent sizes in cache
+      downloadedBytes: downloadedBytes, // Actual downloaded data
+      totalTorrentSize: cacheSize, // Same as cacheSize
       totalTorrentSizeFormatted: formatBytes(cacheSize),
       cacheLimitFormatted: formatBytes(cacheLimitBytes),
       usagePercentage: Math.round(usagePercentage * 100) / 100 // Round to 2 decimal places
     };
 
-    console.log(`📊 Cache stats: ${formatBytes(downloadedBytes)} downloaded (${activeTorrents} torrents, ${usagePercentage.toFixed(1)}% of 5GB limit)`);
+    console.log(`📊 Cache stats: ${formatBytes(cacheSize)} cached (${activeTorrents} torrents, ${usagePercentage.toFixed(1)}% of 5GB limit)`);
     res.json(stats);
   } catch (error) {
     console.error('Error getting cache stats:', error);
