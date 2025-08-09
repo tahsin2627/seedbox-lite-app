@@ -18,11 +18,11 @@
   border-radius: 0;
 }
 
-/* Video Player Close Button */
+/* Video Player Close Button - only shown when overlay is hidden */
 .video-close-button {
   position: absolute;
   top: 20px;
-  right: 280px; /* Moved left to avoid overlay conflict */
+  right: 20px; /* Back to original position */
   background: rgba(0, 0, 0, 0.8);
   border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
@@ -103,7 +103,7 @@
 .torrent-stats-overlay {
   position: absolute;
   top: 16px;
-  right: 16px;
+  left: 16px; /* Moved to left side */
   background: rgba(0, 0, 0, 0.85);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -205,34 +205,34 @@
   z-index: 1052; /* Above the overlay */
 }
 
-/* Video close button in overlay */
-.overlay-video-close-button {
-  background: rgba(239, 68, 68, 0.9);
-  border: 2px solid rgba(239, 68, 68, 0.8);
+/* Minimize button for torrent stats - smaller and different styling */
+.stats-minimize {
+  background: rgba(107, 114, 128, 0.8); /* Gray background to differentiate */
+  border: 1px solid rgba(107, 114, 128, 0.6);
   color: white;
   cursor: pointer;
-  padding: 8px;
-  width: 36px;
-  height: 36px;
+  padding: 6px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 6px;
   transition: all 0.2s ease;
   pointer-events: auto;
   position: relative;
-  z-index: 1053; /* Above other overlay elements */
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  z-index: 1052;
 }
 
-.overlay-video-close-button:hover {
-  background: rgba(239, 68, 68, 1);
-  border-color: rgba(239, 68, 68, 1);
+.stats-minimize:hover {
+  background: rgba(107, 114, 128, 1);
+  border-color: rgba(107, 114, 128, 0.8);
+  color: white;
   transform: scale(1.1);
-  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 2px 8px rgba(107, 114, 128, 0.3);
 }
 
-.overlay-video-close-button:active {
+.stats-minimize:active {
   transform: scale(0.95);
 }
 
@@ -436,7 +436,7 @@
 .stats-show-button {
   position: absolute;
   top: 16px;
-  right: 16px;
+  left: 16px; /* Moved to left side to match overlay position */
   background: rgba(74, 222, 128, 0.2);
   border: 1px solid rgba(74, 222, 128, 0.4);
   border-radius: 10px;

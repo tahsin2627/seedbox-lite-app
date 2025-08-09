@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Download, Folder, FileText, Film, Clock, Wifi, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Play, Download, Star, Calendar, Clock, Users, Award, Info, Share, Plus, ThumbsUp, Volume2 } from 'lucide-react';
 import VideoPlayer from './VideoPlayer';
 import { config } from '../config/environment';
 import progressService from '../services/progressService';
@@ -15,6 +15,29 @@ const TorrentPage = () => {
   const [error, setError] = useState(null);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [recentProgress, setRecentProgress] = useState({});
+  const [imdbData, setImdbData] = useState(null);
+  const [imdbLoading, setImdbLoading] = useState(true);
+
+  const fetchIMDBData = useCallback(async () => {
+    try {
+      setImdbLoading(true);
+      const response = await fetch(`${config.apiBaseUrl}/api/torrents/${torrentHash}/imdb`);
+      const data = await response.json();
+      
+      if (data.success && data.imdb) {
+        setImdbData(data.imdb);
+        console.log('📺 IMDB data loaded:', data.imdb.Title);
+      } else {
+        console.log('❌ No IMDB data found');
+        setImdbData(null);
+      }
+    } catch (err) {
+      console.error('Error fetching IMDB data:', err);
+      setImdbData(null);
+    } finally {
+      setImdbLoading(false);
+    }
+  }, [torrentHash]);
 
   const fetchTorrentDetails = useCallback(async () => {
     try {
@@ -68,6 +91,7 @@ const TorrentPage = () => {
   useEffect(() => {
     if (torrentHash) {
       fetchTorrentDetails();
+      fetchIMDBData(); // Add IMDB data fetching
       loadRecentProgress();
       
       // Set up periodic updates for dynamic progress
@@ -77,7 +101,7 @@ const TorrentPage = () => {
       
       return () => clearInterval(progressInterval);
     }
-  }, [torrentHash, fetchTorrentDetails, fetchTorrentProgress, loadRecentProgress]);
+  }, [torrentHash, fetchTorrentDetails, fetchIMDBData, fetchTorrentProgress, loadRecentProgress]);
 
   const handleVideoSelect = (file, index) => {
     setSelectedVideo({

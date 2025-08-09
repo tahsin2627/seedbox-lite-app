@@ -16,6 +16,9 @@ const config = {
   frontend: {
     url: process.env.FRONTEND_URL || 'http://localhost:5173'
   },
+  omdb: {
+    apiKey: process.env.OMDB_API_KEY || '8265bd1c' // Free API key for development
+  },
   isDevelopment: process.env.NODE_ENV === 'development'
 };
 
@@ -23,7 +26,7 @@ const app = express();
 
 // SIMPLE WORKING WebTorrent configuration - minimal and functional
 const client = new WebTorrent({
-  uploadLimit: 1024,         // Allow minimal upload (required for peer reciprocity)
+  uploadLimit: 500,         // Allow minimal upload (required for peer reciprocity)
   downloadLimit: -1          // No download limit
 });
 
@@ -34,7 +37,189 @@ const torrentNames = {};       // Torrent names by infoHash
 const hashToName = {};         // Quick hash-to-name lookup
 const nameToHash = {};         // Quick name-to-hash lookup
 
-// UNIVERSAL TORRENT RESOLVER - Can find torrents by ANY identifier
+// IMDB Integration
+const imdbCache = new Map();
+
+// Enhanced torrent name cleaning with better regex patterns
+function cleanTorrentName(torrentName) {
+    console.log(`🔍 Cleaning torrent name: "${torrentName}"`);
+    
+    if (!torrentName) {
+        return { title: '', year: null };
+    }
+    
+    // Start with the original name
+    let cleanedName = torrentName;
+    
+    // Remove common quality indicators and extensions
+    cleanedName = cleanedName.replace(/\.(mkv|mp4|avi|mov|wmv|flv|m4v|3gp|webm)$/i, '');
+    
+    // Remove quality indicators (more comprehensive)
+    const qualityPatterns = [
+        /\b(720p|1080p|480p|4k|uhd|hd|bluray|brrip|webrip|dvdrip|camrip|ts|telesync|hdtv|web-dl|x264|x265|h264|h265|hevc|10bit|aac|ac3|dts|mp3)\b/gi,
+        /\b(yify|sparks|rarbg|eztv|ettv|galaxy|geckos|scene|repack|proper|real|internal|limited|unrated|extended|directors\.cut)\b/gi,
+        /\[\w+\]/g, // Remove group tags like [YTS] [RARBG]
+        /\([^)]*rip[^)]*\)/gi, // Remove anything with 'rip' in parentheses
+        /\b\d{3,4}mb\b/gi, // Remove file sizes
+        /www\.\w+\.(com|org|net)/gi // Remove website URLs
+    ];
+    
+    qualityPatterns.forEach(pattern => {
+        cleanedName = cleanedName.replace(pattern, '');
+    });
+    
+    // Extract year (look for 4-digit year in parentheses or standalone)
+    let year = null;
+    const yearMatch = cleanedName.match(/\b(19\d{2}|20\d{2})\b/);
+    if (yearMatch) {
+        year = parseInt(yearMatch[1]);
+        cleanedName = cleanedName.replace(/\b(19\d{2}|20\d{2})\b/, '');
+    }
+    
+    // Remove parentheses and brackets with their content
+    cleanedName = cleanedName.replace(/[\[\(].*?[\]\)]/g, '');
+    
+    // Replace dots, underscores, dashes with spaces
+    cleanedName = cleanedName.replace(/[._-]/g, ' ');
+    
+    // Remove multiple spaces and trim
+    cleanedName = cleanedName.replace(/\s+/g, ' ').trim();
+    
+    // Remove common articles for better matching, but store original for display
+    const title = cleanedName;
+    
+    console.log(`🧹 After basic cleaning: "${cleanedName}"`);
+    console.log(`✨ Final cleaned result: title="${title}", year=${year}`);
+    
+    return { title, year };
+}
+
+async function fetchIMDBData(torrentName) {
+    console.log(`🎬 Fetching IMDB data for: "${torrentName}"`);
+    
+    // Check cache first
+    if (imdbCache.has(torrentName)) {
+        console.log(`📋 Using cached IMDB data for: ${torrentName}`);
+        return imdbCache.get(torrentName);
+    }
+    
+    const cleanedData = cleanTorrentName(torrentName);
+    const { title, year } = cleanedData;
+    
+    // Validate title
+    if (!title || title.length < 2) {
+        console.log(`❌ Title too short or empty: "${title}"`);
+        return null;
+    }
+    
+    // Get API key from environment
+    const omdbKey = process.env.OMDB_API_KEY || 'trilogy';
+    
+    // Multiple search strategies with OMDb
+    const omdbStrategies = [
+        // Strategy 1: Title + Year (most accurate)
+        year ? `http://www.omdbapi.com/?apikey=${omdbKey}&t=${encodeURIComponent(title)}&y=${year}` : null,
+        
+        // Strategy 2: Title only
+        `http://www.omdbapi.com/?apikey=${omdbKey}&t=${encodeURIComponent(title)}`,
+        
+        // Strategy 3: Search API for multiple results
+        `http://www.omdbapi.com/?apikey=${omdbKey}&s=${encodeURIComponent(title)}&type=movie`,
+        
+        // Strategy 4: Try with "The" prefix for articles
+        `http://www.omdbapi.com/?apikey=${omdbKey}&t=${encodeURIComponent('The ' + title)}`
+    ].filter(Boolean);
+    
+    // Try OMDb first
+    for (const url of omdbStrategies) {
+        try {
+            console.log(`🔍 Trying OMDb: ${url}`);
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data && data.Response === 'True') {
+                // For search results, take the first movie
+                const movieData = data.Search ? data.Search[0] : data;
+                
+                if (movieData && movieData.Title) {
+                    console.log(`✅ Found OMDb data: ${movieData.Title} (${movieData.Year})`);
+                    
+                    const result = {
+                        Title: movieData.Title,
+                        Year: movieData.Year,
+                        imdbRating: movieData.imdbRating,
+                        imdbVotes: movieData.imdbVotes,
+                        Plot: movieData.Plot,
+                        Director: movieData.Director,
+                        Actors: movieData.Actors,
+                        Poster: movieData.Poster !== 'N/A' ? movieData.Poster : null,
+                        Genre: movieData.Genre,
+                        Runtime: movieData.Runtime,
+                        Rated: movieData.Rated,
+                        imdbID: movieData.imdbID,
+                        source: 'omdb'
+                    };
+                    
+                    // Cache the result
+                    imdbCache.set(torrentName, result);
+                    return result;
+                }
+            } else {
+                console.log(`❌ OMDb error: ${data?.Error || 'Unknown error'}`);
+            }
+        } catch (error) {
+            console.log(`❌ OMDb request error: ${error.message}`);
+        }
+    }
+    
+    // Fallback to TMDB (free public API)
+    console.log(`🎭 Trying TMDB as fallback for: ${title}`);
+    try {
+        const tmdbSearchUrl = `https://api.themoviedb.org/3/search/movie?api_key=3fd2be6f0c70a2a598f084ddfb75487d&query=${encodeURIComponent(title)}${year ? `&year=${year}` : ''}`;
+        console.log(`🔍 Trying TMDB: ${tmdbSearchUrl}`);
+        
+        const searchResponse = await fetch(tmdbSearchUrl);
+        const searchData = await searchResponse.json();
+        
+        if (searchData.results && searchData.results.length > 0) {
+            const movie = searchData.results[0];
+            
+            // Get detailed info
+            const detailsUrl = `https://api.themoviedb.org/3/movie/${movie.id}?api_key=3fd2be6f0c70a2a598f084ddfb75487d&append_to_response=credits`;
+            const detailsResponse = await fetch(detailsUrl);
+            const details = await detailsResponse.json();
+            
+            console.log(`✅ Found TMDB data: ${details.title} (${details.release_date?.substring(0, 4)})`);
+            
+            const result = {
+                Title: details.title,
+                Year: details.release_date?.substring(0, 4),
+                imdbRating: details.vote_average ? (details.vote_average / 10 * 10).toFixed(1) : null,
+                imdbVotes: details.vote_count ? `${details.vote_count.toLocaleString()}` : null,
+                Plot: details.overview,
+                Director: details.credits?.crew?.find(person => person.job === 'Director')?.name,
+                Actors: details.credits?.cast?.slice(0, 4).map(actor => actor.name).join(', '),
+                Poster: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null,
+                Genre: details.genres?.map(g => g.name).join(', '),
+                Runtime: details.runtime ? `${details.runtime} min` : null,
+                Rated: 'N/A', // TMDB doesn't have ratings
+                tmdbID: details.id,
+                source: 'tmdb'
+            };
+            
+            // Cache the result
+            imdbCache.set(torrentName, result);
+            return result;
+        }
+    } catch (error) {
+        console.log(`❌ TMDB error: ${error.message}`);
+    }
+    
+    console.log(`❌ No movie data found for: ${title}`);
+    return null;
+}
+
+//UNIVERSAL TORRENT RESOLVER - Can find torrents by ANY identifier
 const universalTorrentResolver = async (identifier) => {
   console.log(`🔍 Universal resolver looking for: ${identifier}`);
   
@@ -54,7 +239,7 @@ const universalTorrentResolver = async (identifier) => {
   );
   
   if (existingTorrent) {
-    console.log(`✅ Found in WebTorrent client: ${existingTorrent.name}`);
+    console.log(`✅ Found in WebTorrent client: ${existingTorrent.name || existingTorrent.infoHash}`);
     torrents[existingTorrent.infoHash] = existingTorrent;
     return existingTorrent;
   }
@@ -184,8 +369,29 @@ const loadTorrentFromId = (torrentId) => {
       if (!resolved) {
         resolved = true;
         console.log(`⏰ Timeout loading torrent after 30 seconds: ${torrentId}`);
-        console.log(`🔍 Client has ${client.torrents.length} torrents total`);
-        reject(new Error('Timeout loading torrent'));
+        
+        // Check if the torrent was actually added to the client
+        const clientTorrent = client.torrents.find(t => t.infoHash === torrent.infoHash);
+        if (clientTorrent) {
+          console.log(`🔍 Found torrent in client after timeout: ${clientTorrent.name || clientTorrent.infoHash}`);
+          
+          // Store in tracking systems even if metadata isn't fully ready
+          torrents[clientTorrent.infoHash] = clientTorrent;
+          torrentIds[clientTorrent.infoHash] = torrentId;
+          torrentNames[clientTorrent.infoHash] = clientTorrent.name || 'Loading...';
+          hashToName[clientTorrent.infoHash] = clientTorrent.name || 'Loading...';
+          if (clientTorrent.name) {
+            nameToHash[clientTorrent.name] = clientTorrent.infoHash;
+          }
+          
+          clientTorrent.addedAt = new Date().toISOString();
+          clientTorrent.uploadLimit = 1024;
+          
+          resolve(clientTorrent);
+        } else {
+          console.log(`🔍 Client has ${client.torrents.length} torrents total`);
+          reject(new Error('Timeout loading torrent'));
+        }
       }
     }, 30000);
   });
@@ -211,10 +417,22 @@ process.on('SIGINT', () => {
 });
 
 // Configure multer
+const fs = require('fs');
+const uploadsDir = 'uploads/';
+
+// Ensure uploads directory exists
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('📁 Created uploads directory');
+}
+
 const upload = multer({ 
-  dest: 'uploads/',
+  dest: uploadsDir,
   fileFilter: (req, file, cb) => {
     cb(null, file.originalname.endsWith('.torrent'));
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit for torrent files
   }
 });
 
@@ -251,25 +469,146 @@ app.post('/api/torrents', async (req, res) => {
     
     if (!torrent) {
       // If resolver failed, try direct loading
-      const newTorrent = await loadTorrentFromId(torrentId);
-      return res.json({ 
-        infoHash: newTorrent.infoHash,
-        name: newTorrent.name,
-        size: newTorrent.length,
-        status: 'loaded'
-      });
+      try {
+        const newTorrent = await loadTorrentFromId(torrentId);
+        return res.json({ 
+          infoHash: newTorrent.infoHash,
+          name: newTorrent.name || 'Loading...',
+          size: newTorrent.length || 0,
+          status: 'loaded'
+        });
+      } catch (loadError) {
+        // Handle duplicate torrent error specially
+        if (loadError.message.includes('duplicate torrent')) {
+          console.log(`🔍 Duplicate torrent detected, finding existing torrent`);
+          
+          // Extract hash from torrentId if it's a magnet
+          let hash = torrentId;
+          if (torrentId.startsWith('magnet:')) {
+            const match = torrentId.match(/xt=urn:btih:([a-fA-F0-9]{40})/);
+            if (match) hash = match[1];
+          }
+          
+          // Try to find the existing torrent
+          const existingTorrent = Object.values(torrents).find(t => 
+            t.infoHash === hash || 
+            t.infoHash.toLowerCase() === hash.toLowerCase()
+          ) || client.torrents.find(t => 
+            t.infoHash === hash || 
+            t.infoHash.toLowerCase() === hash.toLowerCase()
+          );
+          
+          if (existingTorrent) {
+            return res.json({ 
+              infoHash: existingTorrent.infoHash,
+              name: existingTorrent.name || 'Loading...',
+              size: existingTorrent.length || 0,
+              status: 'existing'
+            });
+          }
+        }
+        
+        throw loadError;
+      }
     }
     
     res.json({ 
       infoHash: torrent.infoHash,
-      name: torrent.name,
-      size: torrent.length,
+      name: torrent.name || 'Loading...',
+      size: torrent.length || 0,
       status: 'found'
     });
     
   } catch (error) {
     console.error(`❌ Universal add failed:`, error.message);
     res.status(500).json({ error: 'Failed to add torrent: ' + error.message });
+  }
+});
+
+// UNIVERSAL FILE UPLOAD - Handle .torrent files
+app.post('/api/torrents/upload', upload.single('torrentFile'), async (req, res) => {
+  console.log(`📁 UNIVERSAL FILE UPLOAD`);
+  
+  if (!req.file) {
+    return res.status(400).json({ error: 'No torrent file provided' });
+  }
+  
+  try {
+    const fs = require('fs');
+    const torrentPath = req.file.path;
+    
+    console.log(`📁 Processing uploaded file: ${req.file.originalname}`);
+    console.log(`📁 File path: ${torrentPath}`);
+    
+    // Read the torrent file
+    const torrentBuffer = fs.readFileSync(torrentPath);
+    
+    // Load the torrent using the buffer
+    const torrent = await new Promise((resolve, reject) => {
+      const loadedTorrent = client.add(torrentBuffer);
+      
+      let resolved = false;
+      
+      loadedTorrent.on('ready', () => {
+        if (resolved) return;
+        resolved = true;
+        
+        console.log(`✅ Torrent uploaded and loaded: ${loadedTorrent.name}`);
+        
+        // Store in tracking systems
+        torrents[loadedTorrent.infoHash] = loadedTorrent;
+        torrentIds[loadedTorrent.infoHash] = req.file.originalname;
+        torrentNames[loadedTorrent.infoHash] = loadedTorrent.name;
+        hashToName[loadedTorrent.infoHash] = loadedTorrent.name;
+        nameToHash[loadedTorrent.name] = loadedTorrent.infoHash;
+        
+        loadedTorrent.addedAt = new Date().toISOString();
+        loadedTorrent.uploadLimit = 1024; // Minimal upload for peer reciprocity
+        
+        resolve(loadedTorrent);
+      });
+      
+      loadedTorrent.on('error', (err) => {
+        if (resolved) return;
+        resolved = true;
+        console.error(`❌ Error loading uploaded torrent:`, err.message);
+        reject(err);
+      });
+      
+      // Timeout after 30 seconds
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          reject(new Error('Timeout loading torrent file'));
+        }
+      }, 30000);
+    });
+    
+    // Clean up uploaded file
+    fs.unlinkSync(torrentPath);
+    
+    res.json({
+      infoHash: torrent.infoHash,
+      name: torrent.name,
+      size: torrent.length,
+      status: 'uploaded',
+      files: torrent.files.length
+    });
+    
+  } catch (error) {
+    console.error(`❌ File upload failed:`, error.message);
+    
+    // Clean up file on error
+    if (req.file && req.file.path) {
+      try {
+        const fs = require('fs');
+        fs.unlinkSync(req.file.path);
+      } catch (cleanupError) {
+        console.error(`❌ Failed to cleanup file:`, cleanupError.message);
+      }
+    }
+    
+    res.status(500).json({ error: 'Failed to upload torrent: ' + error.message });
   }
 });
 
@@ -399,6 +738,47 @@ app.get('/api/torrents/:identifier/stats', async (req, res) => {
   } catch (error) {
     console.error(`❌ Universal stats failed:`, error.message);
     res.status(500).json({ error: 'Failed to get torrent stats: ' + error.message });
+  }
+});
+
+// IMDB Data Endpoint
+app.get('/api/torrents/:identifier/imdb', async (req, res) => {
+  const identifier = req.params.identifier;
+  console.log(`🎬 IMDB REQUEST: ${identifier}`);
+  
+  try {
+    const torrent = await universalTorrentResolver(identifier);
+    
+    if (!torrent) {
+      console.log(`❌ Torrent not found for identifier: ${identifier}`);
+      return res.status(404).json({ error: 'Torrent not found' });
+    }
+    
+    console.log(`🎬 Found torrent: ${torrent.name}, fetching IMDB data...`);
+    const imdbData = await fetchIMDBData(torrent.name);
+    console.log(`🎬 IMDB data result:`, imdbData ? 'SUCCESS' : 'NULL/UNDEFINED');
+    
+    if (imdbData) {
+      const response = {
+        success: true,
+        torrentName: torrent.name,
+        imdb: imdbData
+      };
+      console.log(`✅ Sending IMDB response:`, JSON.stringify(response, null, 2));
+      res.json(response);
+    } else {
+      const response = {
+        success: false,
+        torrentName: torrent.name,
+        message: 'IMDB data not found'
+      };
+      console.log(`❌ Sending failure response:`, JSON.stringify(response, null, 2));
+      res.json(response);
+    }
+    
+  } catch (error) {
+    console.error(`❌ IMDB endpoint failed:`, error.message);
+    res.status(500).json({ error: 'Failed to get IMDB data: ' + error.message });
   }
 });
 
