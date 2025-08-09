@@ -21,13 +21,10 @@ const config = {
 
 const app = express();
 
-// OPTIMIZED DOWNLOAD-ONLY WebTorrent configuration
+// SIMPLE WORKING WebTorrent configuration - minimal and functional
 const client = new WebTorrent({
-  uploadLimit: 0,        // Strict no-upload policy
-  maxConns: 50,          // Allow more peer connections
-  dht: true,             // Enable DHT for peer discovery
-  lsd: true,             // Enable Local Service Discovery
-  pex: true              // Enable Peer Exchange
+  uploadLimit: 1024,         // Allow minimal upload (required for peer reciprocity)
+  downloadLimit: -1          // No download limit
 });
 
 // UNIVERSAL STORAGE SYSTEM - Multiple ways to find torrents
@@ -109,18 +106,28 @@ const loadTorrentFromId = (torrentId) => {
   return new Promise((resolve, reject) => {
     console.log(`🔄 Loading torrent: ${torrentId}`);
     
-    // If it's just a hash, construct a basic magnet link
+    // If it's just a hash, construct a basic magnet link with reliable trackers
     let magnetUri = torrentId;
     if (torrentId.length === 40 && !torrentId.startsWith('magnet:')) {
-      magnetUri = `magnet:?xt=urn:btih:${torrentId}&tr=udp://tracker.opentrackr.org:1337&tr=udp://tracker.leechers-paradise.org:6969&tr=udp://9.rarbg.to:2710&tr=udp://exodus.desync.com:6969`;
+      magnetUri = `magnet:?xt=urn:btih:${torrentId}&tr=udp://tracker.opentrackr.org:1337/announce&tr=udp://open.demonii.com:1337/announce&tr=udp://tracker.openbittorrent.com:6969/announce&tr=udp://exodus.desync.com:6969/announce&tr=udp://tracker.torrent.eu.org:451/announce&tr=udp://tracker.tiny-vps.com:6969/announce&tr=udp://retracker.lanta-net.ru:2710/announce`;
       console.log(`🧲 Constructed magnet URI from hash: ${magnetUri}`);
     }
     
-    const torrent = client.add(magnetUri, { 
-      path: './downloads'  // Simple download path
-    });
+    const torrent = client.add(magnetUri);
     
     let resolved = false;
+    
+    // Add comprehensive debugging
+    console.log(`🎯 Added torrent to WebTorrent client: ${torrent.infoHash}`);
+    
+    torrent.on('infoHash', () => {
+      console.log(`🔗 Info hash available: ${torrent.infoHash}`);
+    });
+    
+    torrent.on('metadata', () => {
+      console.log(`📋 Metadata received for: ${torrent.name || 'Unknown'}`);
+      console.log(`📊 Files found: ${torrent.files.length}`);
+    });
     
     torrent.on('ready', () => {
       if (resolved) return;
@@ -138,31 +145,8 @@ const loadTorrentFromId = (torrentId) => {
       
       torrent.addedAt = new Date().toISOString();
       
-      // ENFORCE STRICT NO-UPLOAD POLICY
-      torrent.uploadSpeed = 0;
-      torrent._uploadLimit = 0;
-      
-      // Block all upload attempts
-      torrent.on('upload', () => {
-        torrent.uploadSpeed = 0;
-        torrent._uploadLimit = 0;
-      });
-      
-      // Monitor and block any wire connections that try to upload
-      torrent.on('wire', (wire) => {
-        wire.uploaded = 0;
-        wire.uploadSpeed = 0;
-        console.log(`🔒 Wire connected with upload blocking: ${wire.remoteAddress}`);
-      });
-      
-      // Monitor peer connections
-      torrent.on('peer', (peer) => {
-        console.log(`👥 Peer connected: ${peer}`);
-      });
-      
-      torrent.on('noPeers', () => {
-        console.log(`⚠️ No peers found for: ${torrent.name}`);
-      });
+      // MINIMAL upload limit for peer reciprocity (required for downloads)
+      torrent.uploadLimit = 1024; // 1KB/s - minimal but functional
       
       // Configure files for streaming
       torrent.files.forEach((file, index) => {
@@ -195,14 +179,15 @@ const loadTorrentFromId = (torrentId) => {
       reject(error);
     });
     
-    // Extended timeout for peer discovery
+    // Moderate timeout for peer discovery
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
-        console.log(`⏰ Timeout loading torrent after 60 seconds: ${torrentId}`);
+        console.log(`⏰ Timeout loading torrent after 30 seconds: ${torrentId}`);
+        console.log(`🔍 Client has ${client.torrents.length} torrents total`);
         reject(new Error('Timeout loading torrent'));
       }
-    }, 60000);
+    }, 30000);
   });
 };
 
@@ -356,6 +341,64 @@ app.get('/api/torrents/:identifier', async (req, res) => {
   } catch (error) {
     console.error(`❌ Universal get failed:`, error.message);
     res.status(500).json({ error: 'Failed to get torrent details: ' + error.message });
+  }
+});
+
+// UNIVERSAL FILES ENDPOINT - Returns just the files array
+app.get('/api/torrents/:identifier/files', async (req, res) => {
+  const identifier = req.params.identifier;
+  console.log(`📁 UNIVERSAL FILES: ${identifier}`);
+  
+  try {
+    const torrent = await universalTorrentResolver(identifier);
+    
+    if (!torrent) {
+      return res.status(404).json({ error: 'Torrent not found' });
+    }
+
+    const files = torrent.files.map((file, index) => ({
+      index,
+      name: file.name,
+      size: file.length,
+      downloaded: file.downloaded,
+      progress: file.progress
+    }));
+
+    res.json(files);
+    
+  } catch (error) {
+    console.error(`❌ Universal files failed:`, error.message);
+    res.status(500).json({ error: 'Failed to get torrent files: ' + error.message });
+  }
+});
+
+// UNIVERSAL STATS ENDPOINT - Returns just the torrent stats
+app.get('/api/torrents/:identifier/stats', async (req, res) => {
+  const identifier = req.params.identifier;
+  console.log(`📊 UNIVERSAL STATS: ${identifier}`);
+  
+  try {
+    const torrent = await universalTorrentResolver(identifier);
+    
+    if (!torrent) {
+      return res.status(404).json({ error: 'Torrent not found' });
+    }
+
+    res.json({
+      infoHash: torrent.infoHash,
+      name: torrent.name,
+      size: torrent.length,
+      downloaded: torrent.downloaded,
+      uploaded: 0,
+      progress: torrent.progress,
+      downloadSpeed: torrent.downloadSpeed,
+      uploadSpeed: 0,
+      peers: torrent.numPeers
+    });
+    
+  } catch (error) {
+    console.error(`❌ Universal stats failed:`, error.message);
+    res.status(500).json({ error: 'Failed to get torrent stats: ' + error.message });
   }
 });
 
