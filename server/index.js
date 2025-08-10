@@ -24,10 +24,15 @@ const config = {
 
 const app = express();
 
-// SIMPLE WORKING WebTorrent configuration - minimal and functional
+// OPTIMIZED WebTorrent configuration for faster downloads and better buffering
 const client = new WebTorrent({
-  uploadLimit: 500,         // Allow minimal upload (required for peer reciprocity)
-  downloadLimit: -1          // No download limit
+  uploadLimit: 1000,         // Increased upload for better peer reciprocity
+  downloadLimit: -1,         // No download limit
+  maxConns: 150,            // Increased max connections (default is 55)
+  webSeeds: true,           // Enable web seeds
+  tracker: true,            // Enable trackers
+  pex: true,                // Enable peer exchange for discovering more peers
+  dht: true                 // Enable DHT for peer discovery
 });
 
 // UNIVERSAL STORAGE SYSTEM - Multiple ways to find torrents
@@ -464,7 +469,24 @@ const loadTorrentFromId = (torrentId) => {
     let torrent;
     
     try {
-      torrent = client.add(magnetUri);
+      const torrentOptions = {
+        announce: [
+          'udp://tracker.opentrackr.org:1337/announce',
+          'udp://open.demonii.com:1337/announce',
+          'udp://tracker.openbittorrent.com:6969/announce',
+          'udp://exodus.desync.com:6969/announce',
+          'udp://tracker.torrent.eu.org:451/announce',
+          'udp://tracker.tiny-vps.com:6969/announce',
+          'udp://retracker.lanta-net.ru:2710/announce',
+          'udp://9.rarbg.to:2710/announce',
+          'udp://explodie.org:6969/announce',
+          'udp://tracker.coppersurfer.tk:6969/announce'
+        ],
+        private: false,
+        strategy: 'rarest', // Download rarest pieces first for faster startup
+        maxWebConns: 20     // More web seed connections
+      };
+      torrent = client.add(magnetUri, torrentOptions);
     } catch (addError) {
       // Handle duplicate torrent error from WebTorrent client
       if (addError.message && addError.message.includes('duplicate')) {
@@ -526,17 +548,26 @@ const loadTorrentFromId = (torrentId) => {
       // MINIMAL upload limit for peer reciprocity (required for downloads)
       torrent.uploadLimit = 1024; // 1KB/s - minimal but functional
       
-      // Configure files for streaming
+      // Enhanced configuration for streaming with better buffering
       torrent.files.forEach((file, index) => {
         const ext = file.name.toLowerCase().split('.').pop();
         const isSubtitle = ['srt', 'vtt', 'ass', 'ssa', 'sub', 'sbv'].includes(ext);
         const isVideo = ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v'].includes(ext);
         
         if (isSubtitle) {
-          console.log(`📝 Subtitle file: ${file.name}`);
-        } else if (isVideo) {
+          // Select subtitle files with high priority
           file.select();
-          console.log(`🎬 Video file ready: ${file.name}`);
+          console.log(`📝 Subtitle file prioritized: ${file.name}`);
+        } else if (isVideo) {
+          // Optimize video streaming - select with high priority
+          file.select();
+          file.critical = true; // Mark as critical for prioritized downloading
+          
+          // Create a buffer strategy - pre-download the first pieces
+          const BUFFER_SIZE = 10 * 1024 * 1024; // 10MB initial buffer
+          file.createReadStream({ start: 0, end: BUFFER_SIZE });
+          
+          console.log(`🎬 Video file optimized for streaming: ${file.name}`);
         } else {
           file.deselect();
           console.log(`⏭️  Skipping: ${file.name}`);
@@ -557,11 +588,11 @@ const loadTorrentFromId = (torrentId) => {
       reject(error);
     });
     
-    // Moderate timeout for peer discovery
+    // Extended timeout for better peer discovery and metadata retrieval
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
-        console.log(`⏰ Timeout loading torrent after 30 seconds: ${torrentId}`);
+        console.log(`⏰ Timeout loading torrent after 60 seconds: ${torrentId}`);
         
         // Check if the torrent was actually added to the client
         const clientTorrent = client.torrents.find(t => t.infoHash === torrent.infoHash);
@@ -578,7 +609,18 @@ const loadTorrentFromId = (torrentId) => {
           }
           
           clientTorrent.addedAt = new Date().toISOString();
-          clientTorrent.uploadLimit = 1024;
+          clientTorrent.uploadLimit = 2048; // Increased upload for better peer reciprocity
+          
+          // Try to optimize any video files even if metadata is incomplete
+          if (clientTorrent.files && clientTorrent.files.length) {
+            clientTorrent.files.forEach(file => {
+              const ext = file.name.toLowerCase().split('.').pop();
+              if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v'].includes(ext)) {
+                file.select();
+                file.critical = true;
+              }
+            });
+          }
           
           resolve(clientTorrent);
         } else {
@@ -586,7 +628,7 @@ const loadTorrentFromId = (torrentId) => {
           reject(new Error('Timeout loading torrent'));
         }
       }
-    }, 30000);
+    }, 60000); // Extended timeout to 60 seconds
   });
 };
 
@@ -806,7 +848,20 @@ app.post('/api/torrents/upload', upload.single('torrentFile'), async (req, res) 
       let loadedTorrent;
       
       try {
-        loadedTorrent = client.add(torrentBuffer);
+        const torrentOptions = {
+          announce: [
+            'udp://tracker.opentrackr.org:1337/announce',
+            'udp://open.demonii.com:1337/announce',
+            'udp://tracker.openbittorrent.com:6969/announce',
+            'udp://exodus.desync.com:6969/announce',
+            'udp://tracker.torrent.eu.org:451/announce',
+            'udp://9.rarbg.to:2710/announce'
+          ],
+          private: false,
+          strategy: 'rarest', // Download rarest pieces first for faster startup
+          maxWebConns: 20     // More web seed connections
+        };
+        loadedTorrent = client.add(torrentBuffer, torrentOptions);
       } catch (addError) {
         // Handle duplicate torrent in file upload
         if (addError.message && addError.message.includes('duplicate')) {
