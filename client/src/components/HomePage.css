@@ -1,11 +1,13 @@
 .home-page {
-  padding: 20px 40px 20px 20px; /* Reduced left padding since main-content has padding now */
+  padding: 20px 40px 20px calc(10% + 20px); /* 10% padding on the left plus original padding */
   max-width: 1000px;
-  margin: 0; /* Remove auto centering to prevent left alignment */
+  margin: 0;
   background: #0a0a0a;
   min-height: 100vh;
-  width: 100%;
+  width: 90%; /* Reduce width to 90% to prevent overflow */
   box-sizing: border-box;
+  position: relative; /* Add positioning context */
+  left: 10%; /* Shift the content right by 10% */
 }
 
 /* Hero Section */
@@ -272,6 +274,13 @@
 }
 
 @media (max-width: 768px) {
+  .home-page {
+    margin: 0; /* Reset margin on mobile */
+    width: 100%; /* Full width on mobile */
+    padding: 20px; /* Even padding */
+    left: 0; /* Reset left positioning */
+  }
+  
   .features-summary {
     flex-direction: column;
     gap: 20px;
