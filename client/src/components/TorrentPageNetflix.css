@@ -6,7 +6,7 @@
   color: #ffffff;
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   margin: 0;
-  padding: 0;
+  padding: 0 24px;
   overflow-x: hidden;
 }
 
@@ -79,21 +79,24 @@
 /* Hero Section */
 .netflix-hero {
   position: relative;
-  height: 60vh;
+  height: 70vh; /* Increased height to accommodate the poster better */
   background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.7));
   background-size: cover;
   background-position: center;
   display: flex;
-  align-items: flex-end;
+  align-items: center; /* Changed from flex-end to center for better vertical alignment */
   width: 100%;
-  padding: 40px;
+  padding: 40px 48px; /* Increased horizontal padding */
   border-radius: 0;
+  margin-left: -24px;
+  margin-right: -24px;
+  padding-bottom: 60px; /* Add extra padding at the bottom for better alignment */
 }
 
 .netflix-hero-content {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center; /* Changed from flex-end to center for better vertical alignment */
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;
@@ -233,6 +236,9 @@
 .netflix-poster {
   flex-shrink: 0;
   margin-left: 40px;
+  display: flex;
+  align-items: center;
+  height: 100%;
 }
 
 .netflix-poster img {
@@ -241,15 +247,17 @@
   object-fit: cover;
   border-radius: 8px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  margin-bottom: 30px; /* Add space to prevent cropping at top */
 }
 
 /* Content Section */
 .netflix-content {
   display: flex;
   gap: 40px;
-  padding: 0; /* No padding since netflix-page handles it */
+  padding: 0 16px; /* Added horizontal padding */
   max-width: none; /* Use full available width */
-  margin: 0;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .netflix-main-content {
@@ -263,6 +271,7 @@
 
 .netflix-section {
   margin-bottom: 48px;
+  padding: 0 8px;
 }
 
 .netflix-section h2 {
@@ -573,9 +582,9 @@
 /* Responsive Design */
 @media (max-width: 1024px) {
   .netflix-hero {
-    height: 70vh;
-    margin: -24px -24px 24px 0; /* Maintain breakout */
-    padding: 40px; /* Consistent padding */
+    height: 80vh; /* Slightly taller for tablet */
+    margin: -24px -24px 24px -24px; /* Full-width breakout */
+    padding: 40px 36px 60px 36px; /* Slightly reduced horizontal padding, maintain bottom padding */
   }
   
   .netflix-back-btn {
@@ -595,11 +604,14 @@
   .netflix-poster {
     margin-left: 0;
     align-self: center;
+    height: auto;
+    margin-top: 20px;
   }
   
   .netflix-poster img {
     width: 200px;
     height: 300px;
+    margin-bottom: 0; /* Reset margin for tablet */
   }
   
   .netflix-content {
@@ -614,13 +626,15 @@
 
 @media (max-width: 768px) {
   .netflix-page {
-    padding: 16px 16px 16px 0; /* Mobile padding like other pages */
+    padding: 16px 20px; /* Even padding on both sides */
   }
   
   .netflix-hero {
-    height: 60vh;
-    margin: -16px -16px 16px 0; /* Adjust for mobile padding */
-    padding: 20px; /* Mobile padding */
+    height: 65vh; /* Slightly increased height for mobile */
+    margin: -16px -20px 16px -20px; /* Full-width breakout for mobile */
+    padding: 20px 24px 40px 24px; /* Mobile padding with slightly more on sides and bottom */
+    align-items: flex-start; /* Better for mobile stacked layout */
+    padding-top: 60px; /* Add space for the back button */
   }
   
   .netflix-back-btn {
@@ -642,7 +656,7 @@
   }
   
   .netflix-content {
-    padding: 0; /* No additional padding */
+    padding: 0 8px; /* Reduced padding for mobile */
   }
   
   .netflix-episode {
