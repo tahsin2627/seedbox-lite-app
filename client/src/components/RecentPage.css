@@ -1,5 +1,5 @@
 .recent-page {
-  padding: 24px;
+  padding: 24px 24px 24px 0; /* Remove left padding since main-content has padding now */
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -292,7 +292,7 @@
 /* Responsive */
 @media (max-width: 768px) {
   .recent-page {
-    padding: 16px;
+    padding: 16px 0; /* Remove horizontal padding on mobile since main-content handles it */
   }
   
   .page-header {

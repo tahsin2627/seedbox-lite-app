@@ -1,5 +1,5 @@
 .home-page {
-  padding: 20px 40px; /* Reduced top/bottom padding, keep left/right */
+  padding: 20px 40px 20px 20px; /* Reduced left padding since main-content has padding now */
   max-width: 1000px;
   margin: 0; /* Remove auto centering to prevent left alignment */
   background: #0a0a0a;
@@ -598,7 +598,7 @@
 
 @media (max-width: 768px) {
   .home-page {
-    padding: 16px;
+    padding: 16px 0; /* Remove horizontal padding on mobile since main-content handles it */
     margin-top: 0;
   }
   

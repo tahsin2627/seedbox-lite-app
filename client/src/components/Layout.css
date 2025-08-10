@@ -318,12 +318,14 @@
   min-height: 100vh;
   overflow-x: hidden;
   width: 100%;
-  margin-left: 300px; /* Account for sidebar width + spacing */
+  margin-left: 280px; /* Account for sidebar width */
+  padding-left: 20px; /* Add padding for visual spacing */
 }
 
 /* When sidebar is collapsed, main content expands */
 .main-content.expanded {
-  margin-left: 100px; /* Account for collapsed sidebar width + spacing */
+  margin-left: 80px; /* Account for collapsed sidebar width */
+  padding-left: 20px; /* Maintain consistent padding */
 }
 
 /* Mobile Overlay */
@@ -388,12 +390,13 @@
   .main-content {
     margin-top: 56px;
     width: 100%;
-    padding: 0;
+    padding: 0 16px; /* Add mobile padding */
     margin-left: 0;
   }
 
   .main-content.expanded {
     margin-left: 0;
+    padding: 0 16px; /* Maintain mobile padding */
   }
 
   .mobile-overlay {

@@ -1,5 +1,5 @@
 .settings-page {
-  padding: 24px;
+  padding: 24px 24px 24px 0; /* Remove left padding since main-content has padding now */
   max-width: 900px;
   margin: 0 auto;
 }
@@ -383,7 +383,7 @@ input:disabled + .slider:hover {
 /* Mobile Responsive Design */
 @media (max-width: 768px) {
   .settings-page {
-    padding: 16px 12px;
+    padding: 16px 0; /* Remove horizontal padding on mobile since main-content handles it */
     margin-top: 0;
   }
   

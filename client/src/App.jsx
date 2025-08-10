@@ -49,9 +49,12 @@ const AuthenticatedApp = () => {
   return (
     <Router>
       <Routes>
+        {/* Full-width Netflix-style page without sidebar */}
+        <Route path="torrent/:torrentHash" element={<TorrentPageNetflix />} />
+        
+        {/* Main app with sidebar layout */}
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
-          <Route path="torrent/:torrentHash" element={<TorrentPageNetflix />} />
           <Route path="recent" element={<RecentPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="cache" element={<CacheManagementPage />} />

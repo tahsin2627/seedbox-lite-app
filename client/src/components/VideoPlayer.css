@@ -988,12 +988,16 @@
     height: 100vh !important;
     z-index: 9999 !important;
     border-radius: 0 !important;
+    margin: 0 !important; /* Remove any margin */
+    padding: 0 !important; /* Remove any padding */
   }
   
   .video-player-container.fullscreen .video-element {
     width: 100vw !important;
     height: 100vh !important;
     object-fit: contain !important;
+    margin: 0 !important; /* Remove any margin */
+    padding: 0 !important; /* Remove any padding */
   }
   
   /* Ensure controls are visible in mobile fullscreen */
@@ -1002,6 +1006,25 @@
     bottom: 0 !important;
     left: 0 !important;
     right: 0 !important;
+    margin: 0 !important; /* Remove any margin that might cause bottom space */
+  }
+  
+  /* Fix non-fullscreen mobile video player sizing */
+  .video-player-container:not(.fullscreen) {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  .video-player-container:not(.fullscreen) .video-element {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   
   /* Enhanced fullscreen button for mobile */

@@ -178,19 +178,21 @@ const TorrentPageNetflix = () => {
     console.log('🎬 Video selected:', selectedVideo.name, 'Resume from:', initialProgress + 's');
     
     return (
-      <VideoPlayer
-        key={videoKey}
-        src={`${config.apiBaseUrl}/api/torrents/${torrentHash}/files/${selectedVideo.index}/stream`}
-        title={selectedVideo.name}
-        onClose={() => setSelectedVideo(null)}
-        onTimeUpdate={() => {
-          // The VideoPlayer itself handles saving progress with correct duration
-          // We don't need to save it here since VideoPlayer saves every 5 seconds
-        }}
-        initialTime={initialProgress}
-        torrentHash={torrentHash}
-        fileIndex={selectedVideo.index}
-      />
+      <div className="video-overlay">
+        <VideoPlayer
+          key={videoKey}
+          src={`${config.apiBaseUrl}/api/torrents/${torrentHash}/files/${selectedVideo.index}/stream`}
+          title={selectedVideo.name}
+          onClose={() => setSelectedVideo(null)}
+          onTimeUpdate={() => {
+            // The VideoPlayer itself handles saving progress with correct duration
+            // We don't need to save it here since VideoPlayer saves every 5 seconds
+          }}
+          initialTime={initialProgress}
+          torrentHash={torrentHash}
+          fileIndex={selectedVideo.index}
+        />
+      </div>
     );
   }
 
