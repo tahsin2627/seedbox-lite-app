@@ -26,14 +26,13 @@ const app = express();
 
 // OPTIMIZED WebTorrent configuration for faster downloads and better buffering
 const client = new WebTorrent({
-  uploadLimit: 100000,      // 100KB/s for better peer reciprocity (necessary for faster downloads)
+  uploadLimit: 10000,       // 10KB/s for peer reciprocity (balanced setting)
   downloadLimit: -1,        // No download limit
-  maxConns: 200,           // More max connections for better peer discovery
+  maxConns: 150,           // Maximum connections (optimized value)
   webSeeds: true,          // Enable web seeds
   tracker: true,           // Enable trackers
   pex: true,               // Enable peer exchange for discovering more peers
   dht: true,               // Enable DHT for peer discovery
-  chokeTimeout: 3000,      // Faster peer unchoke (3 seconds instead of default 5)
 });
 
 // UNIVERSAL STORAGE SYSTEM - Multiple ways to find torrents
@@ -550,26 +549,8 @@ const loadTorrentFromId = (torrentId) => {
       
       torrent.addedAt = new Date().toISOString();
       
-      // Increased upload limit for better peer reciprocity (required for faster downloads)
-      torrent.uploadLimit = 50000; // 50KB/s - significantly better for download speed
-      
-      // Add wire handshake handler to optimize connections
-      torrent.on('wire', (wire, addr) => {
-        console.log(`🔌 New peer connection from ${addr}`);
-        // Set higher request count to download more pieces in parallel
-        wire.setKeepAlive(true);
-        wire.setTimeout(30000); // 30 seconds timeout
-        
-        // Improve piece selection algorithm with better requesting
-        wire.on('have', () => {
-          // Request rare pieces sooner
-          if (torrent._rarePieces && torrent._rarePieces.length) {
-            torrent._rarePieces.slice(0, 2).forEach(piece => {
-              wire.peerRequests.push(piece);
-            });
-          }
-        });
-      });
+      // Balanced upload limit for peer reciprocity (required for downloads)
+      torrent.uploadLimit = 5000; // 5KB/s - enough for good peer reciprocity
       
       // Stop seeding when download is complete
       torrent.on('done', () => {
@@ -588,56 +569,21 @@ const loadTorrentFromId = (torrentId) => {
           file.select();
           console.log(`📝 Subtitle file prioritized: ${file.name}`);
         } else if (isVideo) {
-          // Advanced video streaming optimization with strategic piece selection
+          // Standard video streaming optimization with moderate piece selection
           file.select();
-          file.critical = true; // Mark as critical for prioritized downloading
           
-          // Create a more aggressive multi-phase buffer strategy for faster downloads
-          const INITIAL_BUFFER_SIZE = 20 * 1024 * 1024; // 20MB at the start (increased)
-          const MID_POINT_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB at the middle (increased)
-          const END_BUFFER_SIZE = 5 * 1024 * 1024; // 5MB at the end (increased)
+          // Create a modest buffer only at the start to improve initial loading
+          const INITIAL_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB at the start
           
-          // 1. First buffer - Beginning of the file (most important)
-          file.createReadStream({ start: 0, end: INITIAL_BUFFER_SIZE });
+          // Only prime the first part of the file for better streaming startup
+          // This avoids creating too many streams that can block API responses
+          const initialStream = file.createReadStream({ start: 0, end: INITIAL_BUFFER_SIZE });
+          initialStream.on('error', () => {}); // Ignore errors on this priming stream
           
-          // 2. Middle buffer - To help with common seeking points
-          const midPoint = Math.floor(file.length / 2);
-          setTimeout(() => {
-            file.createReadStream({ 
-              start: midPoint, 
-              end: midPoint + MID_POINT_BUFFER_SIZE 
-            });
-          }, 2000); // Shorter delay to start middle buffer faster
-          
-          // 3. End buffer - For users who skip to the end
-          const endPoint = file.length - END_BUFFER_SIZE;
-          setTimeout(() => {
-            file.createReadStream({ 
-              start: endPoint > 0 ? endPoint : 0, 
-              end: file.length 
-            });
-          }, 5000); // Shorter delay for end buffer to improve parallel downloading
-          
-          // 4. Additional random chunks to improve overall download speed
-          const quarterPoint = Math.floor(file.length / 4);
-          const threeQuarterPoint = Math.floor(file.length * 3 / 4);
-          
-          setTimeout(() => {
-            file.createReadStream({ 
-              start: quarterPoint, 
-              end: quarterPoint + (5 * 1024 * 1024) // 5MB
-            });
-            
-            file.createReadStream({ 
-              start: threeQuarterPoint, 
-              end: threeQuarterPoint + (5 * 1024 * 1024) // 5MB
-            });
-          }, 7000);
-          
-          console.log(`🚀 Video file optimized for high-speed download: ${file.name}`);
+          console.log(`🎬 Video file optimized for streaming: ${file.name}`);
         } else {
-          // Select all files by default to improve peer connections and download speed
-          file.select();
+          // Only select video and subtitle files to avoid wasting bandwidth
+          file.deselect();
           console.log(`⏭️  Skipping: ${file.name}`);
         }
       });
@@ -677,7 +623,7 @@ const loadTorrentFromId = (torrentId) => {
           }
           
           clientTorrent.addedAt = new Date().toISOString();
-          clientTorrent.uploadLimit = 50000; // Increased upload for much better peer reciprocity (50KB/s)
+          clientTorrent.uploadLimit = 5000; // Moderate upload for peer reciprocity (5KB/s)
           
           // Try to optimize any video files even if metadata is incomplete
           if (clientTorrent.files && clientTorrent.files.length) {
@@ -979,7 +925,7 @@ app.post('/api/torrents/upload', upload.single('torrentFile'), async (req, res) 
         nameToHash[loadedTorrent.name] = loadedTorrent.infoHash;
         
         loadedTorrent.addedAt = new Date().toISOString();
-        loadedTorrent.uploadLimit = 1024; // Minimal upload for peer reciprocity
+        loadedTorrent.uploadLimit = 2048; // Moderate upload for peer reciprocity
         
         resolve(loadedTorrent);
       });
@@ -1275,28 +1221,21 @@ app.get('/api/torrents/:identifier/files/:fileIdx/stream', async (req, res) => {
       // Calculate piece information to prioritize downloads
       const pieceLength = torrent.pieceLength;
       const startPiece = Math.floor(start / pieceLength);
-      const endPiece = Math.floor((end + pieceLength - 1) / pieceLength);
       
-      // Prioritize a window of pieces around the seek position
-      const PRIORITY_WINDOW = 10; // Prioritize 10 pieces ahead of the seek point
-      
-      // Set priority for a range of pieces when seeking
+      // Set priority for pieces at seek position
       if (start > 0) { // Only for seek operations, not initial loads
-        console.log(`🔄 Prioritizing pieces ${startPiece} to ${startPiece + PRIORITY_WINDOW} for smooth playback`);
+        console.log(`🔄 Prioritizing pieces at position ${(start / file.length * 100).toFixed(1)}% for smooth playback`);
         
-        // Create a strategic read stream to prioritize pieces
-        // This will force WebTorrent to download these pieces first
-        const seekStream = file.createReadStream({ 
-          start: start, 
-          end: Math.min(start + (PRIORITY_WINDOW * pieceLength), file.length - 1)
-        });
+        // Prioritize a shorter window of pieces (5 instead of 10)
+        const PRIORITY_WINDOW = 5; 
         
-        // We don't need to use this stream, just creating it prioritizes the pieces
-        seekStream.on('error', () => {}); // Ignore errors on this stream
-        
-        // Artificially create interest in the pieces we need
-        for (let i = 0; i < 3; i++) {
-          file._torrent.select(startPiece + i, startPiece + i + PRIORITY_WINDOW, 1); // Highest priority
+        // Use the built-in prioritization mechanism without creating additional streams
+        if (file._torrent && typeof file._torrent.select === 'function') {
+          try {
+            file._torrent.select(startPiece, startPiece + PRIORITY_WINDOW, 1);
+          } catch (err) {
+            console.log(`⚠️ Error prioritizing pieces: ${err.message}`);
+          }
         }
       }
       

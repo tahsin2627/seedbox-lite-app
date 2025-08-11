@@ -62,3 +62,6 @@ coverage/
 # Optional eslint cache
 .eslintcache
 server-new/.env.production
+
+# Torrents
+downloads
