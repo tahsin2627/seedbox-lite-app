@@ -6,7 +6,7 @@ const path = require('path');
 const WebTorrent = require('webtorrent');
 const multer = require('multer');
 
-// Environment Configuration
+// Environment Configuration with production optimizations
 const config = {
   server: {
     port: process.env.SERVER_PORT || 3000,
@@ -19,7 +19,54 @@ const config = {
   omdb: {
     apiKey: process.env.OMDB_API_KEY || '8265bd1c' // Free API key for development
   },
-  isDevelopment: process.env.NODE_ENV !== 'production'
+  isDevelopment: process.env.NODE_ENV !== 'production',
+  
+  // Production-specific configuration
+  production: {
+    // Streaming settings
+    streaming: {
+      // Maximum time in ms for any streaming request to stay open
+      maxConnectionTime: 300000, // 5 minutes
+      // Default chunk size for video streaming
+      defaultChunkSize: 4 * 1024 * 1024, // 4MB
+      // Upload rate during streaming to ensure good peer reciprocity
+      streamingUploadRate: 10000, // 10KB/s
+      // Enable optimization for remote deployments like DigitalOcean
+      optimizeForRemote: true
+    },
+    
+    // Cache settings
+    cache: {
+      // Time in ms to cache torrent listings
+      torrentListTTL: 5000, // 5 seconds
+      // Time in ms to cache torrent details
+      torrentDetailsTTL: 8000, // 8 seconds
+      // Time in ms to cache IMDB data
+      imdbDataTTL: 3600000, // 1 hour
+      // Memory threshold in MB to trigger cache purge
+      memoryCachePurgeThreshold: 800 // 800MB
+    },
+    
+    // System settings
+    system: {
+      // Maximum memory usage before taking action (MB)
+      maxMemory: 1024, // 1GB
+      // Enable system health monitoring
+      monitoring: true,
+      // Log level (0=errors only, 1=important, 2=verbose)
+      logLevel: parseInt(process.env.LOG_LEVEL || '1', 10)
+    },
+    
+    // Network settings
+    network: {
+      // Maximum number of connections per torrent
+      maxConns: 100,
+      // Default upload limit in bytes/sec
+      defaultUploadLimit: 5000, // 5KB/s
+      // Timeout for API requests
+      apiTimeout: 15000 // 15 seconds
+    }
+  }
 };
 
 const app = express();
@@ -75,15 +122,41 @@ app.use((req, res, next) => {
   next();
 });
 
-// OPTIMIZED WebTorrent configuration for faster downloads and better buffering
+// OPTIMIZED WebTorrent configuration for production and cloud environments
+const isProduction = process.env.NODE_ENV === 'production';
+const isCloud = process.env.CLOUD_DEPLOYMENT === 'true' || 
+                process.env.DIGITAL_OCEAN === 'true' ||
+                process.env.HOSTING === 'cloud';
+
+console.log(`🌐 Running in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
+if (isCloud) console.log(`☁️ Cloud/DigitalOcean deployment detected`);
+
+// Apply production optimization
 const client = new WebTorrent({
-  uploadLimit: 10000,       // 10KB/s for peer reciprocity (balanced setting)
-  downloadLimit: -1,        // No download limit
-  maxConns: 150,           // Maximum connections (optimized value)
-  webSeeds: true,          // Enable web seeds
-  tracker: true,           // Enable trackers
-  pex: true,               // Enable peer exchange for discovering more peers
-  dht: true,               // Enable DHT for peer discovery
+  uploadLimit: isProduction ? config.production.network.defaultUploadLimit : 10000,
+  downloadLimit: -1, // No download limit
+  maxConns: isProduction ? config.production.network.maxConns : 150,
+  webSeeds: true,    // Enable web seeds
+  tracker: true,     // Enable trackers
+  pex: true,         // Enable peer exchange
+  dht: true,         // Enable DHT
+  
+  // Additional network optimizations for cloud environments
+  ...(isCloud && {
+    // More conservative connection handling for cloud environments
+    maxConns: 80,    // Reduced connections to prevent overwhelming the server
+    maxWebConns: 20, // Lower web connections limit
+    
+    // Apply more aggressive timeouts for DHT and tracker communication
+    dhtTimeout: 10000,       // 10 seconds DHT timeout
+    trackerTimeout: 15000,   // 15 seconds tracker timeout
+    
+    // Avoid going offline by keeping connections alive
+    keepSeeding: true,
+    
+    // Throttle UDP traffic to avoid triggering anti-DoS mechanisms
+    utp: true                // Use uTP protocol which is more network-friendly
+  })
 });
 
 // UNIVERSAL STORAGE SYSTEM - Multiple ways to find torrents
@@ -779,22 +852,220 @@ function setupCacheCleanup() {
 // Setup cache cleanup on server start
 setupCacheCleanup();
 
-// Error handling
+// System Health Monitoring
+function setupSystemMonitoring() {
+  console.log('🩺 Setting up system health monitoring');
+  
+  // Track system status
+  global.systemHealth = {
+    startTime: Date.now(),
+    lastCheck: Date.now(),
+    memoryWarnings: 0,
+    apiTimeouts: 0,
+    streamErrors: 0,
+    lastMemoryUsage: 0,
+    torrentCount: 0,
+    totalRequests: 0,
+    highMemoryDetected: false
+  };
+
+  // Check system health every minute
+  setInterval(() => {
+    try {
+      const memoryUsage = process.memoryUsage();
+      const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
+      const rssMemoryMB = Math.round(memoryUsage.rss / 1024 / 1024);
+      
+      global.systemHealth.lastCheck = Date.now();
+      global.systemHealth.lastMemoryUsage = rssMemoryMB;
+      global.systemHealth.torrentCount = client.torrents.length;
+      
+      console.log(`💾 Memory Usage: ${heapUsedMB}MB heap, ${rssMemoryMB}MB total`);
+      console.log(`⚙️ System running for: ${Math.round((Date.now() - global.systemHealth.startTime) / 1000 / 60)} minutes`);
+      console.log(`🧲 Active torrents: ${client.torrents.length}`);
+      
+      // Detect high memory usage
+      const HIGH_MEMORY_THRESHOLD = 1024; // 1GB
+      if (rssMemoryMB > HIGH_MEMORY_THRESHOLD) {
+        console.log(`⚠️ HIGH MEMORY USAGE DETECTED: ${rssMemoryMB}MB`);
+        global.systemHealth.memoryWarnings++;
+        global.systemHealth.highMemoryDetected = true;
+        
+        // Take action if memory usage is persistently high
+        if (global.systemHealth.memoryWarnings > 3) {
+          console.log('🚨 CRITICAL MEMORY USAGE - Performing emergency cleanup');
+          
+          // Clear all caches
+          Object.keys(global).forEach(key => {
+            if (key.includes('_cache') || key.includes('Cache') || 
+                key.endsWith('_time') || key.startsWith('torrent_details_') || 
+                key.startsWith('files_') || key.startsWith('stats_') || 
+                key.startsWith('imdb_data_')) {
+              delete global[key];
+            }
+          });
+          
+          // Force garbage collection if available
+          if (global.gc) {
+            try {
+              global.gc();
+              console.log('♻️ Forced garbage collection');
+            } catch (e) {
+              console.log('♻️ Forced GC failed:', e.message);
+            }
+          }
+          
+          // Reset warning counter after cleanup
+          global.systemHealth.memoryWarnings = 0;
+        }
+      } else {
+        global.systemHealth.highMemoryDetected = false;
+        // Decrease warning counter if memory usage is normal
+        if (global.systemHealth.memoryWarnings > 0) {
+          global.systemHealth.memoryWarnings--;
+        }
+      }
+      
+      // Check for long-running torrents with low progress
+      if (client.torrents.length > 0) {
+        const now = Date.now();
+        client.torrents.forEach(torrent => {
+          // Skip completed torrents
+          if (torrent.progress >= 1) return;
+          
+          // Get when the torrent was added
+          const addedTime = torrent.addedAt ? new Date(torrent.addedAt).getTime() : now;
+          const runningHours = (now - addedTime) / (1000 * 60 * 60);
+          
+          // Check if torrent has been running for over 12 hours with little progress
+          if (runningHours > 12 && torrent.progress < 0.1) {
+            console.log(`⚠️ Stalled torrent detected: ${torrent.name || torrent.infoHash} - Running for ${Math.round(runningHours)}h with only ${(torrent.progress*100).toFixed(1)}% progress`);
+            
+            // Restart the torrent to try to improve its state
+            try {
+              console.log(`🔄 Attempting to restart stalled torrent: ${torrent.infoHash}`);
+              torrent.destroy();
+              
+              // Remove from tracking
+              delete torrents[torrent.infoHash];
+              
+              // Delay re-adding to allow cleanup
+              setTimeout(() => {
+                loadTorrentFromId(torrent.infoHash).catch(err => {
+                  console.error(`❌ Failed to restart torrent:`, err.message);
+                });
+              }, 5000);
+            } catch (e) {
+              console.error(`❌ Failed to restart stalled torrent:`, e.message);
+            }
+          }
+        });
+      }
+      
+    } catch (e) {
+      console.error('❌ Error in system monitoring:', e.message);
+    }
+  }, 60000); // Every minute
+  
+  // Expose system health endpoint
+  app.get('/api/system/health', (req, res) => {
+    const memoryUsage = process.memoryUsage();
+    
+    res.json({
+      status: 'ok',
+      uptime: Date.now() - global.systemHealth.startTime,
+      memory: {
+        heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+        rss: Math.round(memoryUsage.rss / 1024 / 1024),
+        external: Math.round(memoryUsage.external / 1024 / 1024)
+      },
+      torrents: client.torrents.length,
+      warnings: {
+        memory: global.systemHealth.memoryWarnings,
+        api: global.systemHealth.apiTimeouts
+      },
+      highMemory: global.systemHealth.highMemoryDetected,
+      timestamp: Date.now()
+    });
+  });
+}
+
+// Setup system monitoring
+setupSystemMonitoring();
+
+// Error handling with better recovery
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error.message);
+  console.error('❌ Uncaught Exception:', error.message);
+  
+  // Log to system health
+  if (global.systemHealth) {
+    global.systemHealth.lastError = {
+      type: 'uncaughtException',
+      message: error.message,
+      time: Date.now()
+    };
+  }
+  
+  // Try to keep the process running unless it's a critical error
+  if (error.message.includes('EADDRINUSE') || 
+      error.message.includes('Cannot read properties of undefined')) {
+    console.log('🚨 Critical error detected, exiting process');
+    process.exit(1);
+  }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection:', reason);
+  console.error('❌ Unhandled Rejection:', reason);
+  
+  // Log to system health
+  if (global.systemHealth) {
+    global.systemHealth.lastError = {
+      type: 'unhandledRejection',
+      message: reason?.message || String(reason),
+      time: Date.now()
+    };
+  }
 });
 
 process.on('SIGTERM', () => {
   console.log('📤 SIGTERM received, shutting down gracefully...');
+  
+  // Close all torrents cleanly
+  try {
+    console.log('🧲 Closing all torrents...');
+    client.torrents.forEach(torrent => {
+      try {
+        torrent.destroy();
+      } catch (e) {
+        console.log(`❌ Error destroying torrent: ${e.message}`);
+      }
+    });
+    client.destroy();
+  } catch (e) {
+    console.log(`❌ Error closing client: ${e.message}`);
+  }
+  
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
   console.log('📤 SIGINT received, shutting down gracefully...');
+  
+  // Close all torrents cleanly
+  try {
+    console.log('🧲 Closing all torrents...');
+    client.torrents.forEach(torrent => {
+      try {
+        torrent.destroy();
+      } catch (e) {
+        console.log(`❌ Error destroying torrent: ${e.message}`);
+      }
+    });
+    client.destroy();
+  } catch (e) {
+    console.log(`❌ Error closing client: ${e.message}`);
+  }
+  
   process.exit(0);
 });
 
@@ -1510,30 +1781,50 @@ app.get('/api/torrents/:identifier/imdb', async (req, res) => {
   }
 });
 
-// UNIVERSAL STREAMING - Always works if torrent exists
+// UNIVERSAL STREAMING - Enhanced for production environments
 app.get('/api/torrents/:identifier/files/:fileIdx/stream', async (req, res) => {
   const { identifier, fileIdx } = req.params;
-  console.log(`🎬 UNIVERSAL STREAM: ${identifier}/${fileIdx}`);
+  const debugLevel = process.env.DEBUG === 'true';
+  if (debugLevel) console.log(`🎬 UNIVERSAL STREAM: ${identifier}/${fileIdx}`);
+  
+  // Track this specific stream request
+  const streamRequestId = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  
+  // Set a timeout for the entire streaming request
+  const streamTimeout = setTimeout(() => {
+    console.log(`⏱️ Stream request ${streamRequestId} timed out`);
+    if (!res.headersSent && !res.writableEnded) {
+      res.status(504).json({ error: 'Streaming request timeout' });
+    }
+  }, 60000); // 60-second max for stream setup
   
   try {
     const torrent = await universalTorrentResolver(identifier);
     
     if (!torrent) {
+      clearTimeout(streamTimeout);
       return res.status(404).json({ error: 'Torrent not found for streaming' });
     }
     
-    const file = torrent.files[fileIdx];
+    const file = torrent.files[parseInt(fileIdx, 10)];
     if (!file) {
+      clearTimeout(streamTimeout);
       return res.status(404).json({ error: 'File not found' });
     }
     
-    // Ensure torrent is active and file is selected
+    // Ensure torrent is active and file is selected with high priority
     torrent.resume();
     file.select();
+    file.critical = true; // Mark as critical for higher priority
     
-    console.log(`🎬 Streaming: ${file.name} (${(file.length / 1024 / 1024).toFixed(1)} MB)`);
+    // Ensure we don't have too strict upload limits while streaming
+    if (torrent.uploadLimit < 5000) {
+      torrent.uploadLimit = 5000; // Set minimum upload for better peer reciprocity during streaming
+    }
     
-    // Detect file type for proper MIME type
+    if (debugLevel) console.log(`🎬 Streaming: ${file.name} (${(file.length / 1024 / 1024).toFixed(1)} MB)`);
+    
+    // Detect file type for proper MIME type with expanded formats
     const ext = file.name.split('.').pop().toLowerCase();
     const mimeTypes = {
       'mp4': 'video/mp4',
@@ -1543,41 +1834,79 @@ app.get('/api/torrents/:identifier/files/:fileIdx/stream', async (req, res) => {
       'wmv': 'video/x-ms-wmv',
       'flv': 'video/x-flv',
       'webm': 'video/webm',
-      'm4v': 'video/mp4'
+      'm4v': 'video/mp4',
+      'ts': 'video/mp2t',
+      'mts': 'video/mp2t',
+      '3gp': 'video/3gpp',
+      'mpg': 'video/mpeg',
+      'mpeg': 'video/mpeg'
     };
     const contentType = mimeTypes[ext] || 'video/mp4';
     
-    // Enhanced range request handling with smart piece prioritization
+    // Enhanced range request handling
     const range = req.headers.range;
+    
+    // Track when stream ends properly
+    let streamEnded = false;
+    const markStreamEnded = () => {
+      if (!streamEnded) {
+        streamEnded = true;
+        clearTimeout(streamTimeout);
+        if (debugLevel) console.log(`✅ Stream ${streamRequestId} ended properly`);
+      }
+    };
+    
     if (range) {
       const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : file.length - 1;
+      
+      // Calculate a reasonable end position - either requested or 8MB chunk
+      // This ensures we don't try to buffer the entire file at once
+      let end = parts[1] ? parseInt(parts[1], 10) : null;
+      
+      // For seek operations, use a fixed chunk size to ensure reliable streaming
+      if (start > 0 && !end) {
+        const MAX_CHUNK_SIZE = 8 * 1024 * 1024; // 8MB chunks for seeks
+        end = Math.min(start + MAX_CHUNK_SIZE, file.length - 1);
+      } else if (!end) {
+        // Initial request - use a generous initial chunk
+        const INITIAL_CHUNK_SIZE = 4 * 1024 * 1024; // 4MB initial chunk
+        end = Math.min(start + INITIAL_CHUNK_SIZE, file.length - 1);
+      }
+      
       const chunkSize = (end - start) + 1;
       
       // Log seeking behavior for debugging
-      if (start > 0) {
-        console.log(`⏩ Seek detected: Jumped to position ${(start / file.length * 100).toFixed(1)}% of the video`);
+      if (start > 0 && debugLevel) {
+        console.log(`⏩ [${streamRequestId}] Seek: ${(start / file.length * 100).toFixed(1)}%, chunk: ${(chunkSize / 1024 / 1024).toFixed(1)}MB`);
       }
       
-      // Calculate piece information to prioritize downloads
-      const pieceLength = torrent.pieceLength;
-      const startPiece = Math.floor(start / pieceLength);
-      
-      // Set priority for pieces at seek position
-      if (start > 0) { // Only for seek operations, not initial loads
-        console.log(`🔄 Prioritizing pieces at position ${(start / file.length * 100).toFixed(1)}% for smooth playback`);
+      // More aggressive prioritization for seek operations
+      if (start > 0) {
+        const pieceLength = torrent.pieceLength || 16384;
+        const startPiece = Math.floor(start / pieceLength);
+        const endPiece = Math.ceil(end / pieceLength);
         
-        // Prioritize a shorter window of pieces (5 instead of 10)
-        const PRIORITY_WINDOW = 5; 
+        // Prime a larger window for smoother playback
+        const PRIORITY_WINDOW = Math.min(30, Math.ceil((endPiece - startPiece) * 1.5));
         
-        // Use the built-in prioritization mechanism without creating additional streams
-        if (file._torrent && typeof file._torrent.select === 'function') {
-          try {
+        if (debugLevel) console.log(`🔄 [${streamRequestId}] Prioritizing pieces ${startPiece} to ${startPiece + PRIORITY_WINDOW}`);
+        
+        // More robust piece selection
+        try {
+          // First try WebTorrent's selection mechanism
+          if (file._torrent && typeof file._torrent.select === 'function') {
             file._torrent.select(startPiece, startPiece + PRIORITY_WINDOW, 1);
-          } catch (err) {
-            console.log(`⚠️ Error prioritizing pieces: ${err.message}`);
           }
+          
+          // Additionally, also mark critical pieces for extra priority
+          if (file._torrent && file._torrent.critical) {
+            for (let i = startPiece; i < startPiece + 10; i++) {
+              file._torrent.critical(i);
+            }
+          }
+        } catch (err) {
+          console.log(`⚠️ [${streamRequestId}] Prioritization error: ${err.message}`);
         }
       }
       
@@ -1591,13 +1920,37 @@ app.get('/api/torrents/:identifier/files/:fileIdx/stream', async (req, res) => {
         'Expires': '0',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Range, Content-Type',
-        'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
+        'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length',
+        'Connection': 'keep-alive'
       });
       
-      // Create the actual stream for playback
-      const stream = file.createReadStream({ start, end });
-      stream.pipe(res);
+      // Create the stream with robust error handling
+      try {
+        const stream = file.createReadStream({ start, end });
+        
+        // Handle stream events properly
+        stream.on('error', (err) => {
+          console.error(`❌ [${streamRequestId}] Stream error:`, err.message);
+          if (!res.headersSent && !res.writableEnded) {
+            res.status(500).end();
+          }
+        });
+        
+        stream.on('end', markStreamEnded);
+        res.on('close', markStreamEnded);
+        
+        // Pipe with error handling
+        stream.pipe(res);
+      } catch (streamError) {
+        console.error(`❌ [${streamRequestId}] Failed to create stream:`, streamError.message);
+        if (!res.headersSent && !res.writableEnded) {
+          clearTimeout(streamTimeout);
+          res.status(500).json({ error: 'Streaming error: ' + streamError.message });
+        }
+      }
+      
     } else {
+      // Handle full file request (less common)
       res.writeHead(200, {
         'Content-Length': file.length,
         'Content-Type': contentType,
@@ -1609,12 +1962,32 @@ app.get('/api/torrents/:identifier/files/:fileIdx/stream', async (req, res) => {
         'Access-Control-Allow-Headers': 'Range, Content-Type',
         'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
       });
-      file.createReadStream().pipe(res);
+      
+      try {
+        const stream = file.createReadStream();
+        stream.on('error', (err) => {
+          console.error(`❌ [${streamRequestId}] Stream error:`, err.message);
+          if (!res.writableEnded) res.end();
+        });
+        
+        stream.on('end', markStreamEnded);
+        res.on('close', markStreamEnded);
+        
+        stream.pipe(res);
+      } catch (streamError) {
+        clearTimeout(streamTimeout);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Streaming error: ' + streamError.message });
+        }
+      }
     }
     
   } catch (error) {
+    clearTimeout(streamTimeout);
     console.error(`❌ Universal streaming failed:`, error.message);
-    res.status(500).json({ error: 'Streaming failed: ' + error.message });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Streaming failed: ' + error.message });
+    }
   }
 });
 
