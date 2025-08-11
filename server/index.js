@@ -24,6 +24,57 @@ const config = {
 
 const app = express();
 
+// Add performance monitoring middleware for API endpoints
+app.use((req, res, next) => {
+  // Skip for non-API routes
+  if (!req.path.startsWith('/api/')) {
+    return next();
+  }
+
+  // Store start time
+  const startTime = Date.now();
+  
+  // Track if the response has been sent
+  let responseSent = false;
+  
+  // Create a function to log response time
+  const logResponseTime = () => {
+    if (responseSent) return;
+    responseSent = true;
+    
+    const duration = Date.now() - startTime;
+    
+    // Only log slow requests or in debug mode
+    const isSlowRequest = duration > 1000;
+    const debugLevel = process.env.DEBUG === 'true';
+    
+    if (isSlowRequest || debugLevel) {
+      const routeName = req.path;
+      console.log(
+        `⏱️ ${isSlowRequest ? '⚠️ SLOW API' : 'API'} ${req.method} ${routeName}: ${duration}ms` +
+        (isSlowRequest ? ' - Consider optimization!' : '')
+      );
+    }
+  };
+  
+  // Log when response is finished
+  res.on('finish', logResponseTime);
+  res.on('close', logResponseTime);
+  
+  // Set a global timeout for all API requests
+  res.setTimeout(10000, () => {
+    console.log(`⏱️ ⚠️ Global timeout reached for ${req.path}`);
+    if (!res.headersSent) {
+      res.status(503).send({ 
+        error: 'Request timeout', 
+        message: 'Server is busy, please try again later' 
+      });
+    }
+  });
+  
+  next();
+});
+
 // OPTIMIZED WebTorrent configuration for faster downloads and better buffering
 const client = new WebTorrent({
   uploadLimit: 10000,       // 10KB/s for peer reciprocity (balanced setting)
@@ -387,56 +438,73 @@ async function fetchIMDBData(torrentName) {
     return null;
 }
 
-//UNIVERSAL TORRENT RESOLVER - Can find torrents by ANY identifier
+//UNIVERSAL TORRENT RESOLVER - Can find torrents by ANY identifier with optimized performance
 const universalTorrentResolver = async (identifier) => {
-  console.log(`🔍 Universal resolver looking for: ${identifier}`);
-  
-  // Strategy 1: Direct hash match in torrents
-  if (torrents[identifier]) {
-    console.log(`✅ Found by direct hash match: ${torrents[identifier].name}`);
-    return torrents[identifier];
-  }
-  
-  // Strategy 2: Check if it's already in WebTorrent client
-  const existingTorrent = client.torrents.find(t => 
-    t.infoHash === identifier ||
-    t.magnetURI === identifier ||
-    t.name === identifier ||
-    identifier.includes(t.infoHash) ||
-    t.infoHash.includes(identifier)
-  );
-  
-  if (existingTorrent) {
-    console.log(`✅ Found in WebTorrent client: ${existingTorrent.name || existingTorrent.infoHash}`);
-    torrents[existingTorrent.infoHash] = existingTorrent;
-    return existingTorrent;
-  }
-  
-  // Strategy 3: Try to reload using stored torrent ID
-  const originalTorrentId = torrentIds[identifier];
-  if (originalTorrentId) {
-    console.log(`🔄 Reloading using stored ID: ${originalTorrentId}`);
-    try {
-      const torrent = await loadTorrentFromId(originalTorrentId);
-      return torrent;
-    } catch (error) {
-      console.error(`❌ Failed to reload from stored ID:`, error.message);
-    }
-  }
-  
-  // Strategy 4: Search by partial hash match
-  for (const [hash, torrent] of Object.entries(torrents)) {
-    if (hash.includes(identifier) || identifier.includes(hash)) {
-      console.log(`✅ Found by partial hash match: ${torrent.name}`);
-      return torrent;
-    }
-  }
-  
-  // Strategy 5: Search by name
-  const hashByName = nameToHash[identifier];
-  if (hashByName && torrents[hashByName]) {
-    console.log(`✅ Found by name lookup: ${identifier}`);
-    return torrents[hashByName];
+  // Use a timeout to prevent hanging operations
+  let resolverTimeout;
+  const timeoutPromise = new Promise((_, reject) => {
+    resolverTimeout = setTimeout(() => {
+      reject(new Error('Resolver timed out after 5 seconds'));
+    }, 5000);
+  });
+
+  try {
+    // Create a promise for the resolution process
+    const resolutionPromise = (async () => {
+      // Skip verbose logging on frequent API calls
+      const debugLevel = process.env.DEBUG === 'true';
+      if (debugLevel) console.log(`🔍 Universal resolver looking for: ${identifier}`);
+      
+      // Optimize with direct lookups for better performance - O(1) operations
+      // Strategy 1: Direct hash match in torrents - fastest path
+      if (torrents[identifier]) {
+        return torrents[identifier];
+      }
+      
+      // Strategy 2: Check lookup tables - also very fast
+      const hashByName = nameToHash[identifier];
+      if (hashByName && torrents[hashByName]) {
+        return torrents[hashByName];
+      }
+
+      const originalTorrentId = torrentIds[identifier];
+      if (originalTorrentId && torrents[originalTorrentId]) {
+        return torrents[originalTorrentId];
+      }
+      
+      // Strategy 3: Check WebTorrent client
+      // Reduce search complexity by using a direct infoHash comparison when possible
+      if (identifier.length === 40) {
+        // For hash-like identifiers, do direct comparison
+        const existingTorrent = client.torrents.find(t => 
+          t.infoHash === identifier
+        );
+        
+        if (existingTorrent) {
+          torrents[existingTorrent.infoHash] = existingTorrent;
+          return existingTorrent;
+        }
+      } else {
+        // For non-hash identifiers, check other properties
+        const existingTorrent = client.torrents.find(t => 
+          t.name === identifier ||
+          t.magnetURI === identifier
+        );
+        
+        if (existingTorrent) {
+          torrents[existingTorrent.infoHash] = existingTorrent;
+          return existingTorrent;
+        }
+      }
+    })();
+
+    // Race the resolution against the timeout
+    return await Promise.race([resolutionPromise, timeoutPromise]);
+  } catch (error) {
+    console.error(`⚠️ Resolver error: ${error.message}`);
+    return null;
+  } finally {
+    clearTimeout(resolverTimeout);
   }
   
   // Strategy 6: If identifier looks like a torrent ID/magnet, try loading it
@@ -645,6 +713,71 @@ const loadTorrentFromId = (torrentId) => {
     }, 60000); // Extended timeout to 60 seconds
   });
 };
+
+// Add a cache cleanup mechanism to prevent memory bloat
+function setupCacheCleanup() {
+  console.log('🧹 Setting up cache cleanup system');
+  
+  // Run cache cleanup every 5 minutes
+  setInterval(() => {
+    const now = Date.now();
+    let cleanedEntries = 0;
+    
+    // Get all global variables that might be caches
+    const potentialCacheKeys = Object.keys(global).filter(key => {
+      return (
+        key.startsWith('torrent_details_') ||
+        key.startsWith('imdb_data_') ||
+        key.startsWith('files_') ||
+        key.startsWith('stats_') ||
+        key === 'torrentListCache'
+      );
+    });
+    
+    // Clean up time entries too
+    const timeKeys = Object.keys(global).filter(key => key.endsWith('_time'));
+    
+    // Process cache entries
+    potentialCacheKeys.forEach(key => {
+      const timeKey = `${key}_time`;
+      
+      // If it has a timestamp, check if it's expired
+      if (global[timeKey]) {
+        const maxAge = key.startsWith('imdb_data_') ? 3600000 : 300000; // 1 hour for IMDB, 5 minutes for others
+        
+        if (now - global[timeKey] > maxAge) {
+          delete global[key];
+          delete global[timeKey];
+          cleanedEntries++;
+        }
+      } else if (key === 'torrentListCache' && global.torrentListCacheTime) {
+        // Special case for torrentListCache
+        if (now - global.torrentListCacheTime > 300000) { // 5 minutes
+          delete global.torrentListCache;
+          delete global.torrentListCacheTime;
+          cleanedEntries++;
+        }
+      }
+    });
+    
+    if (cleanedEntries > 0) {
+      console.log(`🧹 Cache cleanup completed: ${cleanedEntries} entries removed`);
+    }
+    
+    // Force garbage collection if available (Node with --expose-gc flag)
+    if (global.gc) {
+      try {
+        global.gc();
+        console.log('♻️ Manual garbage collection triggered');
+      } catch (e) {
+        console.log('♻️ Manual garbage collection failed:', e.message);
+      }
+    }
+  }, 300000); // Every 5 minutes
+}
+
+// Setup cache cleanup on server start
+setupCacheCleanup();
 
 // Error handling
 process.on('uncaughtException', (error) => {
@@ -998,171 +1131,380 @@ app.post('/api/torrents/upload', upload.single('torrentFile'), async (req, res) 
   }
 });
 
-// UNIVERSAL GET TORRENTS - Always returns results
+// UNIVERSAL GET TORRENTS - Always returns results with optimized performance
 app.get('/api/torrents', (req, res) => {
-  const activeTorrents = Object.values(torrents).map(torrent => ({
-    infoHash: torrent.infoHash,
-    name: torrent.name,
-    size: torrent.length,
-    downloaded: torrent.downloaded,
-    uploaded: 0,
-    progress: torrent.progress,
-    downloadSpeed: torrent.downloadSpeed,
-    uploadSpeed: 0,
-    peers: torrent.numPeers,
-    addedAt: torrent.addedAt || new Date().toISOString()
-  }));
-  
-  console.log(`📊 Returning ${activeTorrents.length} active torrents`);
-  res.json({ torrents: activeTorrents });
-});
-
-// UNIVERSAL GET TORRENT DETAILS - NEVER returns "not found"
-app.get('/api/torrents/:identifier', async (req, res) => {
-  const identifier = req.params.identifier;
-  console.log(`🎯 UNIVERSAL GET: ${identifier}`);
+  // Add a timeout to abort long-running requests
+  res.setTimeout(3000, () => {
+    console.log('Request timed out for /api/torrents');
+    if (!res.headersSent) {
+      res.status(503).json({ error: 'Request timeout', message: 'Server is busy, try again later' });
+    }
+  });
   
   try {
+    // Use simple cache to avoid regenerating the same data repeatedly
+    const now = Date.now();
+    if (global.torrentListCache && 
+        global.torrentListCacheTime && 
+        now - global.torrentListCacheTime < 2000) { // 2 second cache
+      return res.json(global.torrentListCache);
+    }
+    
+    // Minimize operations by using more efficient code
+    const activeTorrents = [];
+    for (const key in torrents) {
+      const torrent = torrents[key];
+      if (!torrent) continue;
+      
+      activeTorrents.push({
+        infoHash: torrent.infoHash,
+        name: torrent.name,
+        size: torrent.length || 0,
+        downloaded: torrent.downloaded || 0,
+        uploaded: 0,
+        progress: torrent.progress || 0,
+        downloadSpeed: torrent.downloadSpeed || 0,
+        uploadSpeed: 0,
+        peers: torrent.numPeers || 0,
+        addedAt: torrent.addedAt || new Date().toISOString()
+      });
+    }
+    
+    // Skip verbose logging on each poll
+    const response = { torrents: activeTorrents };
+    
+    // Cache the result
+    global.torrentListCache = response;
+    global.torrentListCacheTime = now;
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Error in /api/torrents:', error.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// UNIVERSAL GET TORRENT DETAILS - Optimized for performance
+app.get('/api/torrents/:identifier', async (req, res) => {
+  const identifier = req.params.identifier;
+  
+  // Add a timeout to prevent hanging requests
+  const requestTimeout = setTimeout(() => {
+    console.log(`⏱️ Request timed out for torrent details: ${identifier}`);
+    if (!res.headersSent) {
+      res.status(503).json({ 
+        error: 'Request timeout', 
+        message: 'Torrent details request timed out, server is busy'
+      });
+    }
+  }, 5000); // 5 second timeout
+  
+  try {
+    // Check cache first to avoid repeated lookups
+    const cacheKey = `torrent_details_${identifier}`;
+    const now = Date.now();
+    if (global[cacheKey] && 
+        global[`${cacheKey}_time`] && 
+        now - global[`${cacheKey}_time`] < 3000) { // 3 second cache
+      clearTimeout(requestTimeout);
+      return res.json(global[cacheKey]);
+    }
+    
+    // Only log for non-cached requests
+    if (process.env.DEBUG === 'true') {
+      console.log(`🎯 UNIVERSAL GET: ${identifier}`);
+    }
+    
     const torrent = await universalTorrentResolver(identifier);
     
     if (!torrent) {
-      // Last resort: return helpful error with suggestions
-      const suggestions = Object.values(torrents).map(t => ({
-        infoHash: t.infoHash,
-        name: t.name
-      }));
+      clearTimeout(requestTimeout);
+      
+      // Don't generate suggestions on every request - expensive operation
+      // Only include up to 5 suggestions to keep response size small
+      const suggestions = Object.values(torrents)
+        .slice(0, 5)
+        .map(t => ({
+          infoHash: t.infoHash,
+          name: t.name
+        }));
       
       return res.status(404).json({ 
         error: 'Torrent not found',
         identifier,
         suggestions,
-        availableTorrents: suggestions.length
+        availableTorrents: Object.keys(torrents).length // Just count, don't process
       });
     }
 
-    const files = torrent.files.map((file, index) => ({
-      index,
-      name: file.name,
-      size: file.length,
-      downloaded: file.downloaded,
-      progress: file.progress
-    }));
+    // More efficient file mapping with early returns for large torrents
+    const maxFilesToShow = 1000; // Limit files for very large torrents
+    const files = torrent.files
+      .slice(0, maxFilesToShow)
+      .map((file, index) => ({
+        index,
+        name: file.name,
+        size: file.length || 0,
+        downloaded: file.downloaded || 0,
+        progress: file.progress || 0
+      }));
 
-    res.json({ 
+    const response = { 
       torrent: {
         infoHash: torrent.infoHash,
         name: torrent.name,
-        size: torrent.length,
-        downloaded: torrent.downloaded,
+        size: torrent.length || 0,
+        downloaded: torrent.downloaded || 0,
         uploaded: 0,
-        progress: torrent.progress,
-        downloadSpeed: torrent.downloadSpeed,
+        progress: torrent.progress || 0,
+        downloadSpeed: torrent.downloadSpeed || 0,
         uploadSpeed: 0,
-        peers: torrent.numPeers
+        peers: torrent.numPeers || 0,
+        files: torrent.files?.length || 0,
+        addedAt: torrent.addedAt || new Date().toISOString()
       }, 
-      files 
-    });
+      files,
+      filesTotal: torrent.files?.length || 0,
+      filesShown: files.length
+    };
+    
+    // Cache the result
+    global[cacheKey] = response;
+    global[`${cacheKey}_time`] = now;
+    
+    clearTimeout(requestTimeout);
+    res.json(response);
     
   } catch (error) {
+    clearTimeout(requestTimeout);
     console.error(`❌ Universal get failed:`, error.message);
     res.status(500).json({ error: 'Failed to get torrent details: ' + error.message });
   }
 });
 
-// UNIVERSAL FILES ENDPOINT - Returns just the files array
+// UNIVERSAL FILES ENDPOINT - Optimized with caching and timeout
 app.get('/api/torrents/:identifier/files', async (req, res) => {
   const identifier = req.params.identifier;
-  console.log(`📁 UNIVERSAL FILES: ${identifier}`);
+  const debugLevel = process.env.DEBUG === 'true';
+  
+  // Add a timeout to prevent hanging requests
+  const requestTimeout = setTimeout(() => {
+    console.log(`⏱️ Files request timed out for: ${identifier}`);
+    if (!res.headersSent) {
+      res.status(503).json({ 
+        error: 'Request timeout', 
+        message: 'Files request timed out, try again later'
+      });
+    }
+  }, 5000); // 5 second timeout
   
   try {
+    // Check cache first
+    const cacheKey = `files_${identifier}`;
+    const now = Date.now();
+    if (global[cacheKey] && 
+        global[`${cacheKey}_time`] && 
+        now - global[`${cacheKey}_time`] < 10000) { // 10 second cache
+      clearTimeout(requestTimeout);
+      return res.json(global[cacheKey]);
+    }
+    
+    if (debugLevel) console.log(`📁 UNIVERSAL FILES: ${identifier}`);
+    
     const torrent = await universalTorrentResolver(identifier);
     
     if (!torrent) {
+      clearTimeout(requestTimeout);
       return res.status(404).json({ error: 'Torrent not found' });
     }
 
-    const files = torrent.files.map((file, index) => ({
-      index,
-      name: file.name,
-      size: file.length,
-      downloaded: file.downloaded,
-      progress: file.progress
-    }));
+    // Handle large torrents more efficiently by paginating results
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 1000;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    
+    const totalFiles = torrent.files.length;
+    
+    const files = torrent.files
+      .slice(start, end)
+      .map((file, idx) => ({
+        index: start + idx, // Correct index based on pagination
+        name: file.name,
+        size: file.length || 0,
+        downloaded: file.downloaded || 0,
+        progress: file.progress || 0
+      }));
 
-    res.json(files);
+    const response = {
+      files,
+      pagination: {
+        page,
+        pageSize,
+        totalFiles,
+        totalPages: Math.ceil(totalFiles / pageSize)
+      }
+    };
+    
+    // Cache the response
+    global[cacheKey] = response;
+    global[`${cacheKey}_time`] = now;
+    
+    clearTimeout(requestTimeout);
+    res.json(response);
     
   } catch (error) {
+    clearTimeout(requestTimeout);
     console.error(`❌ Universal files failed:`, error.message);
     res.status(500).json({ error: 'Failed to get torrent files: ' + error.message });
   }
 });
 
-// UNIVERSAL STATS ENDPOINT - Returns just the torrent stats
+// UNIVERSAL STATS ENDPOINT - Optimized with caching and timeout
 app.get('/api/torrents/:identifier/stats', async (req, res) => {
   const identifier = req.params.identifier;
-  console.log(`📊 UNIVERSAL STATS: ${identifier}`);
+  const debugLevel = process.env.DEBUG === 'true';
+  
+  // Add a timeout to prevent hanging requests
+  const requestTimeout = setTimeout(() => {
+    console.log(`⏱️ Stats request timed out for: ${identifier}`);
+    if (!res.headersSent) {
+      res.status(503).json({ 
+        error: 'Request timeout', 
+        message: 'Stats request timed out, try again later'
+      });
+    }
+  }, 3000); // 3 second timeout
   
   try {
+    // Use a short-lived cache for stats (2 seconds)
+    // This helps with rapid polling from frontend
+    const cacheKey = `stats_${identifier}`;
+    const now = Date.now();
+    if (global[cacheKey] && 
+        global[`${cacheKey}_time`] && 
+        now - global[`${cacheKey}_time`] < 2000) { // 2 second cache
+      clearTimeout(requestTimeout);
+      return res.json(global[cacheKey]);
+    }
+    
+    if (debugLevel) console.log(`📊 UNIVERSAL STATS: ${identifier}`);
+    
     const torrent = await universalTorrentResolver(identifier);
     
     if (!torrent) {
+      clearTimeout(requestTimeout);
       return res.status(404).json({ error: 'Torrent not found' });
     }
 
-    res.json({
+    const stats = {
       infoHash: torrent.infoHash,
       name: torrent.name,
-      size: torrent.length,
-      downloaded: torrent.downloaded,
+      size: torrent.length || 0,
+      downloaded: torrent.downloaded || 0,
       uploaded: 0,
-      progress: torrent.progress,
-      downloadSpeed: torrent.downloadSpeed,
+      progress: torrent.progress || 0,
+      downloadSpeed: torrent.downloadSpeed || 0,
       uploadSpeed: 0,
-      peers: torrent.numPeers
-    });
+      peers: torrent.numPeers || 0,
+      timeStamp: Date.now()
+    };
+    
+    // Cache the result
+    global[cacheKey] = stats;
+    global[`${cacheKey}_time`] = now;
+    
+    clearTimeout(requestTimeout);
+    res.json(stats);
     
   } catch (error) {
+    clearTimeout(requestTimeout);
     console.error(`❌ Universal stats failed:`, error.message);
     res.status(500).json({ error: 'Failed to get torrent stats: ' + error.message });
   }
 });
 
-// IMDB Data Endpoint
+// IMDB Data Endpoint - Optimized with caching and timeout
 app.get('/api/torrents/:identifier/imdb', async (req, res) => {
   const identifier = req.params.identifier;
-  console.log(`🎬 IMDB REQUEST: ${identifier}`);
+  const debugLevel = process.env.DEBUG === 'true';
+  
+  // Add a timeout to prevent hanging requests from external APIs
+  const requestTimeout = setTimeout(() => {
+    console.log(`⏱️ IMDB request timed out for: ${identifier}`);
+    if (!res.headersSent) {
+      res.status(503).json({ 
+        error: 'Request timeout', 
+        message: 'IMDB data request timed out, try again later'
+      });
+    }
+  }, 15000); // 15 second timeout for API calls
   
   try {
+    // Check endpoint-specific cache first
+    const cacheKey = `imdb_data_${identifier}`;
+    const now = Date.now();
+    if (global[cacheKey] && 
+        global[`${cacheKey}_time`] && 
+        now - global[`${cacheKey}_time`] < 3600000) { // 1 hour cache for IMDB data
+      clearTimeout(requestTimeout);
+      return res.json(global[cacheKey]);
+    }
+    
+    if (debugLevel) console.log(`🎬 IMDB REQUEST: ${identifier}`);
+    
     const torrent = await universalTorrentResolver(identifier);
     
     if (!torrent) {
-      console.log(`❌ Torrent not found for identifier: ${identifier}`);
+      clearTimeout(requestTimeout);
+      if (debugLevel) console.log(`❌ Torrent not found for identifier: ${identifier}`);
       return res.status(404).json({ error: 'Torrent not found' });
     }
     
-    console.log(`🎬 Found torrent: ${torrent.name}, fetching IMDB data...`);
-    const imdbData = await fetchIMDBData(torrent.name);
-    console.log(`🎬 IMDB data result:`, imdbData ? 'SUCCESS' : 'NULL/UNDEFINED');
+    if (debugLevel) console.log(`🎬 Found torrent: ${torrent.name}, fetching IMDB data...`);
     
+    // Use Promise.race to implement a secondary timeout for just the API call
+    const imdbDataPromise = fetchIMDBData(torrent.name);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('IMDB API timeout')), 10000)
+    );
+    
+    const imdbData = await Promise.race([imdbDataPromise, timeoutPromise])
+      .catch(err => {
+        console.log(`⚠️ IMDB API error/timeout: ${err.message}`);
+        return null;
+      });
+    
+    if (debugLevel) console.log(`🎬 IMDB data result:`, imdbData ? 'SUCCESS' : 'NULL/UNDEFINED');
+    
+    let response;
     if (imdbData) {
-      const response = {
+      response = {
         success: true,
         torrentName: torrent.name,
-        imdb: imdbData
+        imdb: imdbData,
+        cached: false
       };
-      console.log(`✅ Sending IMDB response:`, JSON.stringify(response, null, 2));
-      res.json(response);
+      if (debugLevel) console.log(`✅ IMDB data found for: ${torrent.name}`);
     } else {
-      const response = {
+      response = {
         success: false,
         torrentName: torrent.name,
-        message: 'IMDB data not found'
+        message: 'IMDB data not found',
+        cached: false
       };
-      console.log(`❌ Sending failure response:`, JSON.stringify(response, null, 2));
-      res.json(response);
+      if (debugLevel) console.log(`❌ No IMDB data found for: ${torrent.name}`);
     }
     
+    // Cache the response
+    global[cacheKey] = response;
+    global[`${cacheKey}_time`] = now;
+    
+    clearTimeout(requestTimeout);
+    res.json(response);
+    
   } catch (error) {
+    clearTimeout(requestTimeout);
     console.error(`❌ IMDB endpoint failed:`, error.message);
     res.status(500).json({ error: 'Failed to get IMDB data: ' + error.message });
   }
