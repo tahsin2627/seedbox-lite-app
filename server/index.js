@@ -1508,7 +1508,7 @@ app.listen(PORT, HOST, () => {
       console.log(`🛑 Disabled seeding for ${completedCount} already completed torrents`);
     }
   }, 5000); // Give the server 5 seconds to initialize properly
-});
+  
   console.log(`🎯 ZERO "Not Found" Errors Guaranteed`);
   console.log(`⚠️  SECURITY: Download-only mode - Zero uploads guaranteed`);
   
