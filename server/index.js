@@ -548,6 +548,12 @@ const loadTorrentFromId = (torrentId) => {
       // MINIMAL upload limit for peer reciprocity (required for downloads)
       torrent.uploadLimit = 1024; // 1KB/s - minimal but functional
       
+      // Stop seeding when download is complete
+      torrent.on('done', () => {
+        console.log(`✅ Download complete for ${torrent.name} - Stopping seeding`);
+        torrent.uploadLimit = 0; // Disable uploading once download is complete
+      });
+      
       // Enhanced configuration for streaming with better buffering
       torrent.files.forEach((file, index) => {
         const ext = file.name.toLowerCase().split('.').pop();
@@ -862,6 +868,12 @@ app.post('/api/torrents/upload', upload.single('torrentFile'), async (req, res) 
           maxWebConns: 20     // More web seed connections
         };
         loadedTorrent = client.add(torrentBuffer, torrentOptions);
+        
+        // Stop seeding when download is complete
+        loadedTorrent.on('done', () => {
+          console.log(`✅ Download complete for ${loadedTorrent.name} - Stopping seeding`);
+          loadedTorrent.uploadLimit = 0; // Disable uploading once download is complete
+        });
       } catch (addError) {
         // Handle duplicate torrent in file upload
         if (addError.message && addError.message.includes('duplicate')) {
@@ -1457,6 +1469,28 @@ app.get('/api/system/disk', (req, res) => {
   }
 });
 
+// Function to disable seeding for completed torrents
+function disableSeedingForCompletedTorrents() {
+  let completedCount = 0;
+  
+  client.torrents.forEach(torrent => {
+    // Check if torrent is complete (downloaded === length)
+    if (torrent.progress === 1 || torrent.downloaded === torrent.length) {
+      torrent.uploadLimit = 0;
+      completedCount++;
+      console.log(`✅ Found completed torrent: ${torrent.name} - Disabled seeding`);
+    } else {
+      // Add 'done' event handler if not already completed
+      torrent.once('done', () => {
+        console.log(`✅ Download complete for ${torrent.name} - Stopping seeding`);
+        torrent.uploadLimit = 0; // Disable uploading once download is complete
+      });
+    }
+  });
+  
+  return completedCount;
+}
+
 // Start server
 const PORT = config.server.port;
 const HOST = config.server.host;
@@ -1466,6 +1500,15 @@ app.listen(PORT, HOST, () => {
   console.log(`🌱 Seedbox Lite server running on ${serverUrl}`);
   console.log(`📱 Frontend URL: ${config.frontend.url}`);
   console.log(`🚀 UNIVERSAL TORRENT RESOLUTION SYSTEM ACTIVE`);
+  
+  // Disable seeding for any already completed torrents
+  setTimeout(() => {
+    const completedCount = disableSeedingForCompletedTorrents();
+    if (completedCount > 0) {
+      console.log(`🛑 Disabled seeding for ${completedCount} already completed torrents`);
+    }
+  }, 5000); // Give the server 5 seconds to initialize properly
+});
   console.log(`🎯 ZERO "Not Found" Errors Guaranteed`);
   console.log(`⚠️  SECURITY: Download-only mode - Zero uploads guaranteed`);
   
