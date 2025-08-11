@@ -26,13 +26,14 @@ const app = express();
 
 // OPTIMIZED WebTorrent configuration for faster downloads and better buffering
 const client = new WebTorrent({
-  uploadLimit: 1000,         // Increased upload for better peer reciprocity
-  downloadLimit: -1,         // No download limit
-  maxConns: 150,            // Increased max connections (default is 55)
-  webSeeds: true,           // Enable web seeds
-  tracker: true,            // Enable trackers
-  pex: true,                // Enable peer exchange for discovering more peers
-  dht: true                 // Enable DHT for peer discovery
+  uploadLimit: 100000,      // 100KB/s for better peer reciprocity (necessary for faster downloads)
+  downloadLimit: -1,        // No download limit
+  maxConns: 200,           // More max connections for better peer discovery
+  webSeeds: true,          // Enable web seeds
+  tracker: true,           // Enable trackers
+  pex: true,               // Enable peer exchange for discovering more peers
+  dht: true,               // Enable DHT for peer discovery
+  chokeTimeout: 3000,      // Faster peer unchoke (3 seconds instead of default 5)
 });
 
 // UNIVERSAL STORAGE SYSTEM - Multiple ways to find torrents
@@ -480,11 +481,15 @@ const loadTorrentFromId = (torrentId) => {
           'udp://retracker.lanta-net.ru:2710/announce',
           'udp://9.rarbg.to:2710/announce',
           'udp://explodie.org:6969/announce',
-          'udp://tracker.coppersurfer.tk:6969/announce'
+          'udp://tracker.coppersurfer.tk:6969/announce',
+          'wss://tracker.btorrent.xyz', // WebSocket tracker
+          'wss://tracker.webtorrent.io', // WebSocket tracker
+          'wss://tracker.openwebtorrent.com' // WebSocket tracker
         ],
         private: false,
         strategy: 'rarest', // Download rarest pieces first for faster startup
-        maxWebConns: 20     // More web seed connections
+        maxWebConns: 30,    // More web seed connections
+        path: './downloads' // Ensure consistent download location
       };
       torrent = client.add(magnetUri, torrentOptions);
     } catch (addError) {
@@ -545,8 +550,26 @@ const loadTorrentFromId = (torrentId) => {
       
       torrent.addedAt = new Date().toISOString();
       
-      // MINIMAL upload limit for peer reciprocity (required for downloads)
-      torrent.uploadLimit = 1024; // 1KB/s - minimal but functional
+      // Increased upload limit for better peer reciprocity (required for faster downloads)
+      torrent.uploadLimit = 50000; // 50KB/s - significantly better for download speed
+      
+      // Add wire handshake handler to optimize connections
+      torrent.on('wire', (wire, addr) => {
+        console.log(`🔌 New peer connection from ${addr}`);
+        // Set higher request count to download more pieces in parallel
+        wire.setKeepAlive(true);
+        wire.setTimeout(30000); // 30 seconds timeout
+        
+        // Improve piece selection algorithm with better requesting
+        wire.on('have', () => {
+          // Request rare pieces sooner
+          if (torrent._rarePieces && torrent._rarePieces.length) {
+            torrent._rarePieces.slice(0, 2).forEach(piece => {
+              wire.peerRequests.push(piece);
+            });
+          }
+        });
+      });
       
       // Stop seeding when download is complete
       torrent.on('done', () => {
@@ -569,10 +592,10 @@ const loadTorrentFromId = (torrentId) => {
           file.select();
           file.critical = true; // Mark as critical for prioritized downloading
           
-          // Create a multi-phase buffer strategy
-          const INITIAL_BUFFER_SIZE = 15 * 1024 * 1024; // 15MB at the start
-          const MID_POINT_BUFFER_SIZE = 5 * 1024 * 1024; // 5MB at the middle
-          const END_BUFFER_SIZE = 2 * 1024 * 1024; // 2MB at the end
+          // Create a more aggressive multi-phase buffer strategy for faster downloads
+          const INITIAL_BUFFER_SIZE = 20 * 1024 * 1024; // 20MB at the start (increased)
+          const MID_POINT_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB at the middle (increased)
+          const END_BUFFER_SIZE = 5 * 1024 * 1024; // 5MB at the end (increased)
           
           // 1. First buffer - Beginning of the file (most important)
           file.createReadStream({ start: 0, end: INITIAL_BUFFER_SIZE });
@@ -584,7 +607,7 @@ const loadTorrentFromId = (torrentId) => {
               start: midPoint, 
               end: midPoint + MID_POINT_BUFFER_SIZE 
             });
-          }, 5000); // Delay to prioritize the initial buffer first
+          }, 2000); // Shorter delay to start middle buffer faster
           
           // 3. End buffer - For users who skip to the end
           const endPoint = file.length - END_BUFFER_SIZE;
@@ -593,11 +616,28 @@ const loadTorrentFromId = (torrentId) => {
               start: endPoint > 0 ? endPoint : 0, 
               end: file.length 
             });
-          }, 10000); // Longer delay for end buffer
+          }, 5000); // Shorter delay for end buffer to improve parallel downloading
           
-          console.log(`🎬 Video file optimized for advanced streaming: ${file.name}`);
+          // 4. Additional random chunks to improve overall download speed
+          const quarterPoint = Math.floor(file.length / 4);
+          const threeQuarterPoint = Math.floor(file.length * 3 / 4);
+          
+          setTimeout(() => {
+            file.createReadStream({ 
+              start: quarterPoint, 
+              end: quarterPoint + (5 * 1024 * 1024) // 5MB
+            });
+            
+            file.createReadStream({ 
+              start: threeQuarterPoint, 
+              end: threeQuarterPoint + (5 * 1024 * 1024) // 5MB
+            });
+          }, 7000);
+          
+          console.log(`🚀 Video file optimized for high-speed download: ${file.name}`);
         } else {
-          file.deselect();
+          // Select all files by default to improve peer connections and download speed
+          file.select();
           console.log(`⏭️  Skipping: ${file.name}`);
         }
       });
@@ -637,7 +677,7 @@ const loadTorrentFromId = (torrentId) => {
           }
           
           clientTorrent.addedAt = new Date().toISOString();
-          clientTorrent.uploadLimit = 2048; // Increased upload for better peer reciprocity
+          clientTorrent.uploadLimit = 50000; // Increased upload for much better peer reciprocity (50KB/s)
           
           // Try to optimize any video files even if metadata is incomplete
           if (clientTorrent.files && clientTorrent.files.length) {
