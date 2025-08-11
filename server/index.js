@@ -565,15 +565,37 @@ const loadTorrentFromId = (torrentId) => {
           file.select();
           console.log(`📝 Subtitle file prioritized: ${file.name}`);
         } else if (isVideo) {
-          // Optimize video streaming - select with high priority
+          // Advanced video streaming optimization with strategic piece selection
           file.select();
           file.critical = true; // Mark as critical for prioritized downloading
           
-          // Create a buffer strategy - pre-download the first pieces
-          const BUFFER_SIZE = 10 * 1024 * 1024; // 10MB initial buffer
-          file.createReadStream({ start: 0, end: BUFFER_SIZE });
+          // Create a multi-phase buffer strategy
+          const INITIAL_BUFFER_SIZE = 15 * 1024 * 1024; // 15MB at the start
+          const MID_POINT_BUFFER_SIZE = 5 * 1024 * 1024; // 5MB at the middle
+          const END_BUFFER_SIZE = 2 * 1024 * 1024; // 2MB at the end
           
-          console.log(`🎬 Video file optimized for streaming: ${file.name}`);
+          // 1. First buffer - Beginning of the file (most important)
+          file.createReadStream({ start: 0, end: INITIAL_BUFFER_SIZE });
+          
+          // 2. Middle buffer - To help with common seeking points
+          const midPoint = Math.floor(file.length / 2);
+          setTimeout(() => {
+            file.createReadStream({ 
+              start: midPoint, 
+              end: midPoint + MID_POINT_BUFFER_SIZE 
+            });
+          }, 5000); // Delay to prioritize the initial buffer first
+          
+          // 3. End buffer - For users who skip to the end
+          const endPoint = file.length - END_BUFFER_SIZE;
+          setTimeout(() => {
+            file.createReadStream({ 
+              start: endPoint > 0 ? endPoint : 0, 
+              end: file.length 
+            });
+          }, 10000); // Longer delay for end buffer
+          
+          console.log(`🎬 Video file optimized for advanced streaming: ${file.name}`);
         } else {
           file.deselect();
           console.log(`⏭️  Skipping: ${file.name}`);
@@ -1197,13 +1219,46 @@ app.get('/api/torrents/:identifier/files/:fileIdx/stream', async (req, res) => {
     };
     const contentType = mimeTypes[ext] || 'video/mp4';
     
-    // Handle range requests (crucial for mobile video playback)
+    // Enhanced range request handling with smart piece prioritization
     const range = req.headers.range;
     if (range) {
       const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : file.length - 1;
       const chunkSize = (end - start) + 1;
+      
+      // Log seeking behavior for debugging
+      if (start > 0) {
+        console.log(`⏩ Seek detected: Jumped to position ${(start / file.length * 100).toFixed(1)}% of the video`);
+      }
+      
+      // Calculate piece information to prioritize downloads
+      const pieceLength = torrent.pieceLength;
+      const startPiece = Math.floor(start / pieceLength);
+      const endPiece = Math.floor((end + pieceLength - 1) / pieceLength);
+      
+      // Prioritize a window of pieces around the seek position
+      const PRIORITY_WINDOW = 10; // Prioritize 10 pieces ahead of the seek point
+      
+      // Set priority for a range of pieces when seeking
+      if (start > 0) { // Only for seek operations, not initial loads
+        console.log(`🔄 Prioritizing pieces ${startPiece} to ${startPiece + PRIORITY_WINDOW} for smooth playback`);
+        
+        // Create a strategic read stream to prioritize pieces
+        // This will force WebTorrent to download these pieces first
+        const seekStream = file.createReadStream({ 
+          start: start, 
+          end: Math.min(start + (PRIORITY_WINDOW * pieceLength), file.length - 1)
+        });
+        
+        // We don't need to use this stream, just creating it prioritizes the pieces
+        seekStream.on('error', () => {}); // Ignore errors on this stream
+        
+        // Artificially create interest in the pieces we need
+        for (let i = 0; i < 3; i++) {
+          file._torrent.select(startPiece + i, startPiece + i + PRIORITY_WINDOW, 1); // Highest priority
+        }
+      }
       
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${file.length}`,
@@ -1218,6 +1273,7 @@ app.get('/api/torrents/:identifier/files/:fileIdx/stream', async (req, res) => {
         'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, Content-Length'
       });
       
+      // Create the actual stream for playback
       const stream = file.createReadStream({ start, end });
       stream.pipe(res);
     } else {
