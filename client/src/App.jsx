@@ -7,6 +7,7 @@ import TorrentPageNetflix from './components/TorrentPageNetflix';
 import RecentPage from './components/RecentPage';
 import SettingsPage from './components/SettingsPage';
 import CacheManagementPage from './components/CacheManagementPage';
+import SearchSourcesPage from './components/SearchSourcesPage';
 import LoginScreen from './components/LoginScreen';
 import './App.css';
 
@@ -56,6 +57,7 @@ const AuthenticatedApp = () => {
         <Route path="/" element={<Layout />}>
           <Route index element={<HomePage />} />
           <Route path="recent" element={<RecentPage />} />
+          <Route path="search" element={<SearchSourcesPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="cache" element={<CacheManagementPage />} />
         </Route>

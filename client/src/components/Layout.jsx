@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
-import { Home, Clock, Settings, Leaf, Menu, X, HardDrive } from 'lucide-react';
+import { Home, Clock, Settings, Leaf, Menu, X, HardDrive, Search } from 'lucide-react';
 import { config } from '../config/environment';
 import './Layout.css';
 
@@ -17,6 +17,7 @@ const Layout = () => {
   const navigationItems = [
     { path: '/', icon: Home, label: 'Home' },
     { path: '/recent', icon: Clock, label: 'Recent' },
+    { path: '/search', icon: Search, label: 'Search' },
     { path: '/settings', icon: Settings, label: 'Settings' }
   ];
 

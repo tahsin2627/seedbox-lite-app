@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Plus, Link, Download, Leaf, Clock, Search, Trash2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Upload, Plus, Link as LinkIcon, Download, Leaf, Clock, Search, Trash2 } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 import { config } from '../config/environment';
 import torrentHistoryService from '../services/torrentHistoryService';
 import './HomePage.css';
@@ -182,7 +182,7 @@ const HomePage = () => {
           <h2>Add Torrent or Magnet Link</h2>
           <form onSubmit={handleUrlSubmit} className="url-form">
             <div className="input-group">
-              <Link size={20} className="input-icon" />
+              <LinkIcon size={20} className="input-icon" />
               <input
                 type="text"
                 value={torrentUrl}
@@ -231,6 +231,13 @@ const HomePage = () => {
               </label>
             </div>
           </form>
+          
+          {/* Search Sources Link */}
+          <div className="search-sources-link">
+            <Link to="/search" className="search-link">
+              <Search size={18} /> Browse Custom Search Sources
+            </Link>
+          </div>
         </div>
       </div>
 

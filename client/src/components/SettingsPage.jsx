@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Trash2, Download, Globe, Shield, HardDrive, ExternalLink, LogOut } from 'lucide-react';
+import { Settings, Trash2, Download, Globe, Shield, HardDrive, ExternalLink, LogOut, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { config } from '../config/environment';
 import { useAuth } from '../context/AuthContext';
@@ -296,6 +296,12 @@ const SettingsPage = () => {
       <div className="settings-section">
         <h2>🗃️ Data Management</h2>
         <div className="data-actions">
+          <Link to="/search" className="action-button search-management">
+            <Search size={16} />
+            Manage Search Sources
+            <ExternalLink size={14} />
+          </Link>
+        
           <Link to="/cache" className="action-button cache-management">
             <HardDrive size={16} />
             Detailed Cache Management
