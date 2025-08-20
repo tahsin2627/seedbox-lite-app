@@ -56,7 +56,7 @@ ACCESS_PASSWORD=test123456
 
 #### Frontend (.env.production)
 ```bash
-VITE_API_BASE_URL=https://seedbox-api.isalman.dev
+VITE_API_BASE_URL=https://seedbox-api.<domain>
 ```
 
 ### Custom Configuration

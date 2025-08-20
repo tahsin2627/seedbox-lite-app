@@ -5,7 +5,7 @@ echo "🔨 Building frontend for production..."
 
 # Set production environment
 export NODE_ENV=production
-export VITE_API_BASE_URL=https://seedbox-api.isalman.dev
+export VITE_API_BASE_URL=https://seedbox-api.<domain>
 
 # Build the project
 npm run build

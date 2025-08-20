@@ -1,7 +1,7 @@
 # Deployment Guide for CORS Fix
 
 ## Problem
-CORS error: "Access to fetch at 'https://seedbox-api.isalman.dev/api/auth/login' from origin 'https://seedbox.isalman.dev' has been blocked"
+CORS error: "Access to fetch at 'https://seedbox-api.<domain>/api/auth/login' from origin 'https://seedbox.<domain>' has been blocked"
 
 ## Solution Steps
 
@@ -28,7 +28,7 @@ cd /home/toor/seedbox-lite/server-new
 NODE_ENV=production \
 SERVER_PORT=3001 \
 SERVER_HOST=0.0.0.0 \
-FRONTEND_URL=https://seedbox.isalman.dev \
+FRONTEND_URL=https://seedbox.<domain> \
 ACCESS_PASSWORD=seedbox123 \
 node index.js
 ```
@@ -38,7 +38,7 @@ node index.js
 **Rebuild with production API URL:**
 ```bash
 cd /home/toor/seedbox-lite/client
-VITE_API_BASE_URL=https://seedbox-api.isalman.dev npm run build
+VITE_API_BASE_URL=https://seedbox-api.<domain> npm run build
 ```
 
 **Deploy with PM2:**
@@ -66,8 +66,8 @@ pm2 logs seedbox-backend --lines 20
 - Backend runs on port **3001** (as per your .env.production)
 - Make sure your reverse proxy/Cloudflare points to port 3001
 - CORS is now configured to allow both domains:
-  - `https://seedbox.isalman.dev` (frontend)
-  - `https://seedbox-api.isalman.dev` (backend)
+  - `https://seedbox.<domain>` (frontend)
+  - `https://seedbox-api.<domain>` (backend)
 
 ### 5. Debugging
 
@@ -77,8 +77,8 @@ If still having issues, check:
 pm2 logs seedbox-backend
 
 # Test backend health
-curl https://seedbox-api.isalman.dev/api/health
+curl https://seedbox-api.<domain>/api/health
 
 # Test CORS manually
-curl -H "Origin: https://seedbox.isalman.dev" https://seedbox-api.isalman.dev/api/health
+curl -H "Origin: https://seedbox.<domain>" https://seedbox-api.<domain>/api/health
 ```
