@@ -9,6 +9,10 @@
 
 **A modern, lightweight torrent streaming application with instant playback**
 
+<img src="https://raw.githubusercontent.com/hotheadhacker/seedbox-lite/refs/heads/main/screenshots/details-screen.png" alt="SeedBox Lite Screenshot" width="80%"/>
+
+[View all screenshots](https://github.com/hotheadhacker/seedbox-lite/tree/main/screenshots)
+
 [Features](#-features) • [Screenshots](#-screenshots) • [Quick Start](#-quick-start) • [Installation](#-installation) • [Documentation](#-documentation)
 
 </div>
