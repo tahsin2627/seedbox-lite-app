@@ -131,7 +131,7 @@ deploy_pm2() {
     
     # Install backend dependencies
     print_info "Installing backend dependencies..."
-    cd server-new
+    cd server
     npm install --production
     cd ..
     print_success "Backend dependencies installed"
@@ -153,7 +153,7 @@ module.exports = {
     {
       name: 'seedbox-backend',
       script: 'index.js',
-      cwd: './server-new',
+      cwd: './server',
       env: {
         NODE_ENV: 'production',
       },
@@ -186,7 +186,7 @@ EOF
     fi
     
     # Create logs directory
-    mkdir -p server-new/logs
+    mkdir -p server/logs
     
     # Stop existing PM2 processes
     print_info "Stopping existing PM2 processes..."

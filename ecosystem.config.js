@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'seedbox-backend',
       script: 'index.js',
-      cwd: './server-new',
+      cwd: './server',
       env: {
         NODE_ENV: 'production',
       },

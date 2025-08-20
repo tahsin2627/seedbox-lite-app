@@ -29,7 +29,7 @@ seedbox-lite/
 ├── docker-compose.prod.yml         # Production overrides
 ├── nginx/
 │   └── nginx.conf                  # Production nginx config
-├── server-new/
+├── server/
 │   ├── Dockerfile                  # Backend production image
 │   ├── .dockerignore              # Backend ignore patterns
 │   └── .env.docker                # Backend docker env vars
@@ -110,7 +110,7 @@ FRONTEND_PORT=8080 BACKEND_PORT=8081 docker-compose up
 - **Volumes**: 
   - `seedbox_data:/app/data` (torrent data)
   - `seedbox_cache:/app/cache` (cache storage)
-  - `./server-new/logs:/app/logs` (application logs)
+  - `./server/logs:/app/logs` (application logs)
 - **Health Check**: GET /api/health
 
 ### Frontend Container (seedbox-frontend)

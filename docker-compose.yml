@@ -4,7 +4,7 @@ services:
   # Backend API Server
   seedbox-backend:
     build:
-      context: ./server-new
+      context: ./server
       dockerfile: Dockerfile
     container_name: seedbox-backend
     restart: unless-stopped

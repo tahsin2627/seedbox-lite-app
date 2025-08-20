@@ -16,7 +16,7 @@ async function verifyWebTorrentConfig() {
   console.log('\n📋 WebTorrent Configuration Check:');
   
   try {
-    const serverConfig = fs.readFileSync('./server-new/index.js', 'utf8');
+    const serverConfig = fs.readFileSync('./server/index.js', 'utf8');
     
     const checks = [
       { pattern: 'uploadLimit: 0', name: 'Upload Limit Set to 0' },

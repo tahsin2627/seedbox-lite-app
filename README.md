@@ -90,7 +90,7 @@ git clone https://github.com/hotheadhacker/seedbox-lite.git
 cd seedbox-lite
 
 # Install backend dependencies
-cd server-new && npm install
+cd server && npm install
 
 # Install frontend dependencies  
 cd ../client && npm install
@@ -193,7 +193,7 @@ git clone https://github.com/hotheadhacker/seedbox-lite.git
 cd seedbox-lite
 
 # Install backend dependencies
-cd server-new
+cd server
 npm install
 cd ..
 
@@ -207,7 +207,7 @@ cd ..
 #### Step 3: Configure Environment
 ```bash
 # Backend environment
-cd server-new
+cd server
 cp .env.example .env
 nano .env
 ```
@@ -224,7 +224,7 @@ FRONTEND_URL=http://localhost:5174
 #### Step 4: Start Services
 ```bash
 # Start backend with PM2
-cd server-new
+cd server
 pm2 start ecosystem.config.js
 
 # Serve frontend with nginx or serve
@@ -259,7 +259,7 @@ git clone https://github.com/hotheadhacker/seedbox-lite.git
 cd seedbox-lite
 
 # Install backend dependencies
-cd server-new
+cd server
 npm install
 
 # Install frontend dependencies
@@ -270,7 +270,7 @@ npm install
 #### Step 2: Configure Development Environment
 ```bash
 # Backend environment
-cd server-new
+cd server
 cp .env.example .env
 ```
 
@@ -286,7 +286,7 @@ FRONTEND_URL=http://localhost:5173
 #### Step 3: Start Development Servers
 ```bash
 # Terminal 1: Start backend
-cd server-new
+cd server
 npm run dev
 
 # Terminal 2: Start frontend  
@@ -337,7 +337,7 @@ npm run test:a11y
 
 ### Backend Testing
 ```bash
-cd server-new
+cd server
 npm test
 
 # API integration tests

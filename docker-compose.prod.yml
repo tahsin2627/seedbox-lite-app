@@ -10,7 +10,7 @@ services:
       - FRONTEND_URL=https://<domain>
       - ACCESS_PASSWORD=${ACCESS_PASSWORD:-sadsgasgdkjh}
     env_file:
-      - ./server-new/.env.docker
+      - ./server/.env.docker
 
   seedbox-frontend:
     build:

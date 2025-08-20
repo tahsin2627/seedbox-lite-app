@@ -17,14 +17,14 @@ pm2 delete seedbox-backend 2>/dev/null || true
 
 **Deploy with PM2 (Recommended):**
 ```bash
-cd /home/toor/seedbox-lite/server-new
+cd /home/toor/seedbox-lite/server
 mkdir -p logs
 pm2 start ecosystem.config.js
 ```
 
 **Or deploy manually:**
 ```bash
-cd /home/toor/seedbox-lite/server-new
+cd /home/toor/seedbox-lite/server
 NODE_ENV=production \
 SERVER_PORT=3001 \
 SERVER_HOST=0.0.0.0 \
@@ -50,7 +50,7 @@ pm2 start ecosystem.config.js
 
 **Test CORS manually:**
 ```bash
-cd /home/toor/seedbox-lite/server-new
+cd /home/toor/seedbox-lite/server
 chmod +x test-cors.sh
 ./test-cors.sh
 ```
