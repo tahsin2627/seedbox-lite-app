@@ -1,4 +1,6 @@
-# 🎬 SeedBox Lite - Stream Torrents Instantly
+# 🎬 SeedBox Lite
+
+Stream Torrents Instantly
 
 <div align="center">
 
