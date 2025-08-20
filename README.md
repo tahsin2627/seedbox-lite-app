@@ -23,6 +23,8 @@ Stream Torrents Instantly
 
 SeedBox Lite is a cutting-edge torrent streaming platform that allows you to watch movies and TV shows instantly without waiting for complete downloads. Built with modern web technologies, it provides a Netflix-like experience with powerful torrent capabilities.
 
+
+
 ### ✨ Key Highlights
 
 - **🎯 Instant Streaming** - Start watching immediately as the torrent downloads
@@ -552,9 +554,29 @@ For high-traffic deployments:
 4. Add tests
 5. Submit pull request
 
+## ⚠️ Legal Disclaimer
+
+**IMPORTANT: Please read this disclaimer carefully before using SeedBox Lite.**
+
+SeedBox Lite is an open-source project provided for educational and personal use only. We do not endorse, promote, or facilitate copyright infringement, illegal streaming, or piracy in any form. This software is designed to be used with legal content only.
+
+- We do not host, store, or distribute any content. All torrents and media are accessed through your own connections.
+- This application is intended for use with content that you have the legal right to access and stream.
+- Users are solely responsible for how they use this software and for ensuring compliance with all applicable laws in their jurisdiction.
+- The creators and contributors of SeedBox Lite take no responsibility for how this software is used.
+- Using torrents to download or share copyrighted materials without permission may be illegal in your country.
+
+By using SeedBox Lite, you acknowledge that you understand these terms and agree to use the software responsibly and legally.
+
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **Custom Non-Commercial License** - see the [LICENSE](LICENSE) file for details.
+
+**Important License Restrictions:**
+- This software is provided for personal, educational, and non-commercial use only
+- Commercial use is strictly prohibited without explicit written permission
+- Redistribution must include this license and copyright notice
+- No warranty or liability is provided with this software
 
 ## 🙏 Acknowledgments
 
