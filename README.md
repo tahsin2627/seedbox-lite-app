@@ -64,20 +64,7 @@ SeedBox Lite is a cutting-edge torrent streaming platform that allows you to wat
 
 ## 📸 Screenshots
 
-### 🏠 Home Dashboard
-*Clean, modern interface showing available torrents and streaming options*
-
-### 🔐 Login Screen
-*Secure authentication with Netflix-inspired design*
-
-### 🎥 Video Player
-*Advanced video player with mobile-optimized controls and fullscreen support*
-
-### 📱 Mobile Experience
-*Responsive design that works perfectly on all mobile devices*
-
-### ⚙️ Settings Panel
-*Easy configuration and cache management interface*
+[View all screenshots](https://github.com/hotheadhacker/seedbox-lite/tree/main/screenshots)
 
 ## 🚀 Quick Start
 
