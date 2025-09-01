@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seedbox Lite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Deeper slate */
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Glassmorphism Header */
+        .glass-header {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Modal transitions */
+        .modal {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .modal.hidden {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+        }
+
+        /* Spinner animation */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            border-top-color: #38bdf8; /* Sky Blue */
+            width: 24px;
+            height: 24px;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Custom file input */
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        .file-input-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-input-btn {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 antialiased">
+
+    <!-- Header -->
+    <header class="glass-header sticky top-0 z-40">
+        <div class="max-w-4xl mx-auto p-4 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-white">Seedbox <span class="text-sky-400">Lite</span></h1>
+            <div class="flex items-center space-x-3">
+                 <div id="connection-status" class="w-3 h-3 rounded-full bg-red-500 transition-colors" title="Disconnected"></div>
+                <button id="settings-btn" class="p-2 rounded-full hover:bg-slate-700/50 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main id="app" class="max-w-4xl mx-auto p-4 md:p-6">
+        <!-- Add Torrent Section -->
+        <div class="mb-8 p-4 bg-slate-800/50 border border-slate-700/50 rounded-lg">
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="text" id="magnet-url" class="flex-grow bg-slate-800 border border-slate-600 rounded-md py-3 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-slate-400 transition" placeholder="Paste magnet link or torrent URL...">
+                <div class="flex items-center gap-2">
+                    <div class="file-input-wrapper">
+                        <button class="file-input-btn w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-700 text-slate-200 font-semibold py-3 px-4 rounded-md hover:bg-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            Upload
+                        </button>
+                        <input type="file" id="torrent-file-input" accept=".torrent">
+                    </div>
+                    <button id="add-torrent-btn" class="w-full sm:w-auto flex-shrink-0 bg-sky-500 text-white font-semibold py-3 px-6 rounded-md hover:bg-sky-600 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:bg-slate-600 disabled:cursor-not-allowed">
+                        Add
+                    </button>
+                </div>
+            </div>
+             <p id="file-name-display" class="text-sm text-slate-400 mt-2 h-5"></p>
+        </div>
+        
+        <!-- Loading & Empty States -->
+        <div id="status-container" class="text-center py-16 px-6 bg-slate-800/50 rounded-lg border border-slate-700/50">
+            <div id="loading-indicator" class="hidden justify-center items-center">
+                <div class="spinner"></div>
+                <p class="ml-4 text-lg text-slate-300">Fetching torrents...</p>
+            </div>
+            <div id="empty-state" class="hidden">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-slate-500 mb-4"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
+                <h3 class="text-xl font-semibold text-white mb-2">No Torrents Found</h3>
+                <p class="text-slate-400">Add a magnet link or upload a file to get started.</p>
+            </div>
+        </div>
+
+        <!-- Torrent List -->
+        <div id="torrent-list" class="grid grid-cols-1 gap-4">
+            <!-- Torrent items will be injected here -->
+        </div>
+
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 rounded-lg shadow-xl w-full max-w-md p-6 border border-slate-700">
+            <h2 class="text-2xl font-bold mb-6 text-white">qBittorrent Settings</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="server-url" class="block text-sm font-medium text-slate-300 mb-1">Server URL</label>
+                    <input type="text" id="server-url" class="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="e.g., https://mydomain.com">
+                    <p class="text-xs text-slate-400 mt-1">Include http/https, domain, and port number.</p>
+                </div>
+                <div>
+                    <label for="username" class="block text-sm font-medium text-slate-300 mb-1">Username</label>
+                    <input type="text" id="username" autocomplete="username" class="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-sky-400">
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                    <input type="password" id="password" autocomplete="current-password" class="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-sky-400">
+                </div>
+            </div>
+             <div class="mt-4 p-3 bg-yellow-900/30 text-yellow-200 border border-yellow-700/50 rounded-md text-sm">
+                <strong>Note:</strong> Your browser connects directly to your server. You may need to enable "Bypass authentication for clients on localhost" or adjust CORS settings in qBittorrent for this to work.
+            </div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button id="cancel-settings" class="px-4 py-2 rounded-md text-slate-300 hover:bg-slate-700/50 transition-colors">Cancel</button>
+                <button id="save-settings" class="px-4 py-2 rounded-md bg-sky-500 text-white font-semibold hover:bg-sky-600 transition-colors">Save & Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM Elements ---
+        const app = {
+            settingsBtn: document.getElementById('settings-btn'),
+            settingsModal: document.getElementById('settings-modal'),
+            saveSettingsBtn: document.getElementById('save-settings'),
+            cancelSettingsBtn: document.getElementById('cancel-settings'),
+            serverUrlInput: document.getElementById('server-url'),
+            usernameInput: document.getElementById('username'),
+            passwordInput: document.getElementById('password'),
+            torrentList: document.getElementById('torrent-list'),
+            addTorrentBtn: document.getElementById('add-torrent-btn'),
+            magnetUrlInput: document.getElementById('magnet-url'),
+            torrentFileInput: document.getElementById('torrent-file-input'),
+            fileNameDisplay: document.getElementById('file-name-display'),
+            connectionStatus: document.getElementById('connection-status'),
+            statusContainer: document.getElementById('status-container'),
+            loadingIndicator: document.getElementById('loading-indicator'),
+            emptyState: document.getElementById('empty-state'),
+        };
+
+        // --- State ---
+        let state = {
+            config: { url: '', username: '', password: '' },
+            torrents: [],
+            isLoggedIn: false,
+            isLoading: false,
+            refreshInterval: null,
+            torrentFile: null,
+        };
+
+        // --- Utility Functions ---
+        const formatBytes = (bytes, decimals = 2) => {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        };
+        
+        const formatEta = (seconds) => {
+            if (seconds > 8640000 || !isFinite(seconds)) return '∞';
+            if (seconds < 1) return 'Done';
+            const d = Math.floor(seconds / 86400);
+            const h = Math.floor((seconds % 86400) / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            return [d > 0 ? `${d}d` : '', h > 0 ? `${h}h` : '', m > 0 ? `${m}m` : ''].filter(Boolean).join(' ') || '...';
+        };
+
+        // --- UI Rendering ---
+        const renderTorrentList = () => {
+            app.loadingIndicator.classList.add('hidden');
+            
+            if (state.torrents.length === 0) {
+                app.statusContainer.classList.remove('hidden');
+                app.emptyState.classList.remove('hidden');
+                app.torrentList.innerHTML = '';
+                return;
+            }
+            
+            app.statusContainer.classList.add('hidden');
+            app.torrentList.innerHTML = '';
+
+            const sortedTorrents = [...state.torrents].sort((a, b) => b.added_on - a.added_on);
+
+            sortedTorrents.forEach(torrent => {
+                const progress = (torrent.progress * 100).toFixed(1);
+                const isDownloading = torrent.state === 'downloading' || torrent.state === 'metaDL';
+                
+                const torrentElement = document.createElement('div');
+                torrentElement.className = 'bg-slate-800/70 p-4 rounded-lg border border-slate-700 shadow-lg hover:border-sky-500/50 transition-all duration-300';
+                torrentElement.innerHTML = `
+                    <div class="flex flex-col md:flex-row justify-between md:items-center gap-2">
+                        <p class="font-semibold text-slate-50 truncate pr-4" title="${torrent.name}">${torrent.name}</p>
+                        <span class="text-xs font-mono px-2 py-1 rounded bg-slate-700 text-slate-300 self-start md:self-center capitalize">${torrent.state.replace(/([A-Z])/g, ' $1').trim()}</span>
+                    </div>
+                    <div class="mt-4">
+                        <div class="flex justify-between items-center mb-1 text-sm text-slate-400">
+                            <span>${progress}% of ${formatBytes(torrent.size)}</span>
+                            <span>${formatBytes(torrent.dlspeed)}/s ↓</span>
+                        </div>
+                        <div class="w-full bg-slate-700 rounded-full h-2.5">
+                            <div class="bg-gradient-to-r from-sky-500 to-cyan-400 h-2.5 rounded-full transition-all duration-500" style="width: ${progress}%"></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-sm text-center border-t border-slate-700 pt-4">
+                        <div><p class="text-slate-400">ETA</p><p class="font-medium text-white">${formatEta(torrent.eta)}</p></div>
+                        <div><p class="text-slate-400">Up</p><p class="font-medium text-white">${formatBytes(torrent.upspeed)}/s</p></div>
+                        <div><p class="text-slate-400">Ratio</p><p class="font-medium text-white">${torrent.ratio.toFixed(2)}</p></div>
+                        <div><p class="text-slate-400">Peers</p><p class="font-medium text-white">${torrent.num_leechs} (${torrent.num_seeds})</p></div>
+                    </div>
+                `;
+                app.torrentList.appendChild(torrentElement);
+            });
+        };
+        
+        const updateConnectionStatus = (isConnected) => {
+            app.connectionStatus.classList.toggle('bg-green-500', isConnected);
+            app.connectionStatus.classList.toggle('bg-red-500', !isConnected);
+            app.connectionStatus.title = isConnected ? 'Connected' : 'Disconnected';
+        };
+
+        // --- qBittorrent API Logic ---
+        const apiRequest = async (endpoint, options = {}) => {
+            const url = `${state.config.url}/api/v2${endpoint}`;
+            try {
+                const response = await fetch(url, { ...options, credentials: 'include' });
+                if (response.status === 403) {
+                    console.error("Authentication failed. Re-logging in.");
+                    state.isLoggedIn = false;
+                    updateConnectionStatus(false);
+                    await login();
+                    return null;
+                }
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const contentType = response.headers.get("content-type");
+                return contentType?.includes("application/json") ? await response.json() : await response.text();
+            } catch (error) {
+                console.error(`API request to ${endpoint} failed:`, error);
+                updateConnectionStatus(false);
+                return null;
+            }
+        };
+
+        const login = async () => {
+            if (!state.config.url || !state.config.username) return false;
+            const formData = new FormData();
+            formData.append('username', state.config.username);
+            formData.append('password', state.config.password);
+            try {
+                const res = await apiRequest('/auth/login', { method: 'POST', body: formData });
+                state.isLoggedIn = res?.trim().toLowerCase() === 'ok.';
+                updateConnectionStatus(state.isLoggedIn);
+                return state.isLoggedIn;
+            } catch (error) {
+                state.isLoggedIn = false;
+                updateConnectionStatus(false);
+                return false;
+            }
+        };
+
+        const fetchTorrents = async () => {
+            if (!state.isLoggedIn || state.isLoading) return;
+            state.isLoading = true;
+            if (app.torrentList.innerHTML === '') {
+                app.statusContainer.classList.remove('hidden');
+                app.loadingIndicator.classList.remove('hidden');
+                app.emptyState.classList.add('hidden');
+            }
+            const data = await apiRequest('/torrents/info');
+            if (data) {
+                state.torrents = data;
+                renderTorrentList();
+            } else if (!state.isLoggedIn) {
+                 await loginAndFetch();
+            }
+            state.isLoading = false;
+        };
+
+        const addTorrent = async () => {
+            const magnetUrl = app.magnetUrlInput.value.trim();
+            if (!magnetUrl && !state.torrentFile) return;
+            if (!state.isLoggedIn) { alert('Not connected. Check settings.'); return; }
+
+            app.addTorrentBtn.disabled = true;
+            app.addTorrentBtn.textContent = '...';
+
+            const formData = new FormData();
+            if (state.torrentFile) {
+                formData.append('torrents', state.torrentFile, state.torrentFile.name);
+            } else {
+                formData.append('urls', magnetUrl);
+            }
+
+            const result = await apiRequest('/torrents/add', { method: 'POST', body: formData });
+
+            if (result?.trim().toLowerCase() === 'ok.') {
+                app.magnetUrlInput.value = '';
+                state.torrentFile = null;
+                app.fileNameDisplay.textContent = '';
+                setTimeout(fetchTorrents, 1000);
+            } else {
+                alert('Failed to add torrent. Check the URL/file and your connection.');
+            }
+            
+            app.addTorrentBtn.disabled = false;
+            app.addTorrentBtn.textContent = 'Add';
+        };
+
+        // --- Main Logic & Event Handlers ---
+        const loadConfig = () => {
+            try {
+                const savedConfig = localStorage.getItem('seedboxLiteConfig');
+                if (savedConfig) {
+                    state.config = JSON.parse(savedConfig);
+                    app.serverUrlInput.value = state.config.url;
+                    app.usernameInput.value = state.config.username;
+                    app.passwordInput.value = state.config.password;
+                }
+            } catch (e) {
+                console.error("Failed to load config", e);
+            }
+        };
+
+        const saveConfig = () => {
+            state.config.url = app.serverUrlInput.value.trim().replace(/\/$/, ""); // Remove trailing slash
+            state.config.username = app.usernameInput.value.trim();
+            state.config.password = app.passwordInput.value;
+            localStorage.setItem('seedboxLiteConfig', JSON.stringify(state.config));
+        };
+
+        const loginAndFetch = async () => {
+            if (await login()) {
+                await fetchTorrents();
+            }
+        };
+
+        const startAutoRefresh = () => {
+            if (state.refreshInterval) clearInterval(state.refreshInterval);
+            state.refreshInterval = setInterval(fetchTorrents, 5000);
+        };
+        
+        const stopAutoRefresh = () => clearInterval(state.refreshInterval);
+
+        // --- Event Listeners ---
+        app.settingsBtn.addEventListener('click', () => {
+            app.settingsModal.classList.remove('hidden');
+            stopAutoRefresh();
+        });
+        
+        const closeSettings = () => {
+            app.settingsModal.classList.add('hidden');
+            if (state.isLoggedIn) startAutoRefresh();
+        };
+
+        app.cancelSettingsBtn.addEventListener('click', closeSettings);
+        app.settingsModal.addEventListener('click', (e) => {
+            if (e.target === app.settingsModal) closeSettings();
+        });
+
+        app.saveSettingsBtn.addEventListener('click', async () => {
+            saveConfig();
+            app.settingsModal.classList.add('hidden');
+            app.torrentList.innerHTML = '';
+            await loginAndFetch();
+            if (state.isLoggedIn) startAutoRefresh();
+        });
+        
+        app.addTorrentBtn.addEventListener('click', addTorrent);
+        app.magnetUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addTorrent();
+        });
+        
+        app.torrentFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                state.torrentFile = file;
+                app.fileNameDisplay.textContent = `Selected file: ${file.name}`;
+                app.magnetUrlInput.value = ''; // Clear magnet input if file is selected
+            }
+        });
+
+        // --- Initialization ---
+        const init = async () => {
+            loadConfig();
+            if (state.config.url) {
+                await loginAndFetch();
+                if (state.isLoggedIn) {
+                    startAutoRefresh();
+                } else {
+                    app.settingsModal.classList.remove('hidden');
+                }
+            } else {
+                app.settingsModal.classList.remove('hidden');
+            }
+        };
+
+        init();
+    });
+    </script>
+</body>
+</html>
