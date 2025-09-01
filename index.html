@@ -36,14 +36,14 @@
         }
 
         /* Spinner animation */
-        .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.2);
+        .spinner, .spinner-small {
+            border: 2px solid rgba(255, 255, 255, 0.2);
             border-radius: 50%;
             border-top-color: #38bdf8; /* Sky Blue */
-            width: 24px;
-            height: 24px;
             animation: spin 1s ease-in-out infinite;
         }
+        .spinner { width: 24px; height: 24px; border-width: 4px; }
+        .spinner-small { width: 16px; height: 16px; }
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
@@ -65,6 +65,13 @@
         .file-input-btn {
             cursor: pointer;
         }
+        
+        .wizard-step {
+            display: none;
+        }
+        .wizard-step.active {
+            display: block;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-200 antialiased">
@@ -85,7 +92,7 @@
     <main id="app" class="max-w-4xl mx-auto p-4 md:p-6">
         <!-- Add Torrent Section -->
         <div class="mb-8 p-4 bg-slate-800/50 border border-slate-700/50 rounded-lg">
-            <div class="flex flex-col sm:flex-row gap-2">
+             <div class="flex flex-col sm:flex-row gap-2">
                 <input type="text" id="magnet-url" class="flex-grow bg-slate-800 border border-slate-600 rounded-md py-3 px-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-400 placeholder-slate-400 transition" placeholder="Paste magnet link or torrent URL...">
                 <div class="flex items-center gap-2">
                     <div class="file-input-wrapper">
@@ -103,62 +110,81 @@
              <p id="file-name-display" class="text-sm text-slate-400 mt-2 h-5"></p>
         </div>
         
-        <!-- Loading & Empty States -->
+        <!-- Status Container -->
         <div id="status-container" class="text-center py-16 px-6 bg-slate-800/50 rounded-lg border border-slate-700/50">
             <div id="loading-indicator" class="hidden justify-center items-center">
-                <div class="spinner"></div>
-                <p class="ml-4 text-lg text-slate-300">Fetching torrents...</p>
+                <div class="spinner"></div><p class="ml-4 text-lg text-slate-300">Fetching torrents...</p>
             </div>
             <div id="empty-state" class="hidden">
                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-slate-500 mb-4"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
                 <h3 class="text-xl font-semibold text-white mb-2">No Torrents Found</h3>
                 <p class="text-slate-400">Add a magnet link or upload a file to get started.</p>
             </div>
+             <div id="welcome-state" class="hidden">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-sky-400 mb-4"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8a13 13 0 0 1 13 13m0-13a13 13 0 0 1 13 13m0-13a9 9 0 0 1-7.95 15.95M22 16.1a5 5 0 0 0-3.9-3.9"></path></svg>
+                <h3 class="text-xl font-semibold text-white mb-2">Welcome to Seedbox Lite</h3>
+                <p class="text-slate-400 mb-6">To get started, please connect to your qBittorrent server.</p>
+                <button id="start-setup-btn" class="bg-sky-500 text-white font-semibold py-2 px-5 rounded-md hover:bg-sky-600 transition-colors">Connect to Server</button>
+            </div>
         </div>
 
         <!-- Torrent List -->
-        <div id="torrent-list" class="grid grid-cols-1 gap-4">
-            <!-- Torrent items will be injected here -->
-        </div>
+        <div id="torrent-list" class="grid grid-cols-1 gap-4"></div>
 
     </main>
 
-    <!-- Settings Modal -->
+    <!-- Settings Wizard Modal -->
     <div id="settings-modal" class="modal hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-        <div class="bg-slate-800 rounded-lg shadow-xl w-full max-w-md p-6 border border-slate-700">
-            <h2 class="text-2xl font-bold mb-6 text-white">qBittorrent Settings</h2>
-            <div class="space-y-4">
-                <div>
+        <div class="bg-slate-800 rounded-lg shadow-xl w-full max-w-md border border-slate-700">
+            <div class="p-6">
+                <h2 class="text-2xl font-bold mb-2 text-white">Server Setup</h2>
+                <p class="text-slate-400 mb-6">Let's connect to your qBittorrent Web UI.</p>
+
+                <!-- Step 1: URL -->
+                <div id="wizard-step-1" class="wizard-step">
                     <label for="server-url" class="block text-sm font-medium text-slate-300 mb-1">Server URL</label>
-                    <input type="text" id="server-url" class="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="e.g., https://mydomain.com">
-                    <p class="text-xs text-slate-400 mt-1">Include http/https, domain, and port number.</p>
+                    <input type="text" id="server-url" class="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="e.g., https://192.168.1.10:8080">
+                    <details class="text-xs text-slate-400 mt-2 cursor-pointer">
+                        <summary>Where do I find this?</summary>
+                        <p class="mt-1 pl-2 border-l border-slate-600">In qBittorrent, go to <strong class="text-slate-300">Tools → Options → Web UI</strong>. The URL is your server's IP address or domain, followed by the "Port" number, like <code class="bg-slate-900 px-1 rounded">:8080</code>.</p>
+                    </details>
                 </div>
-                <div>
-                    <label for="username" class="block text-sm font-medium text-slate-300 mb-1">Username</label>
-                    <input type="text" id="username" autocomplete="username" class="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-sky-400">
-                </div>
-                <div>
-                    <label for="password" class="block text-sm font-medium text-slate-300 mb-1">Password</label>
-                    <input type="password" id="password" autocomplete="current-password" class="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-sky-400">
+
+                <!-- Step 2: Credentials -->
+                <div id="wizard-step-2" class="wizard-step">
+                    <div class="space-y-4">
+                         <div>
+                            <label for="username" class="block text-sm font-medium text-slate-300 mb-1">Username</label>
+                            <input type="text" id="username" autocomplete="username" class="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-sky-400">
+                        </div>
+                        <div>
+                            <label for="password" class="block text-sm font-medium text-slate-300 mb-1">Password</label>
+                            <input type="password" id="password" autocomplete="current-password" class="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-sky-400">
+                        </div>
+                    </div>
                 </div>
             </div>
-             <div class="mt-4 p-3 bg-yellow-900/30 text-yellow-200 border border-yellow-700/50 rounded-md text-sm">
-                <strong>Note:</strong> Your browser connects directly to your server. You may need to enable "Bypass authentication for clients on localhost" or adjust CORS settings in qBittorrent for this to work.
-            </div>
-            <div class="flex justify-end space-x-3 mt-6">
-                <button id="cancel-settings" class="px-4 py-2 rounded-md text-slate-300 hover:bg-slate-700/50 transition-colors">Cancel</button>
-                <button id="save-settings" class="px-4 py-2 rounded-md bg-sky-500 text-white font-semibold hover:bg-sky-600 transition-colors">Save & Connect</button>
+            
+            <!-- Footer with buttons -->
+            <div class="bg-slate-800/50 px-6 py-4 border-t border-slate-700 flex justify-between items-center">
+                 <button id="cancel-settings" class="px-4 py-2 rounded-md text-slate-300 hover:bg-slate-700/50 transition-colors">Cancel</button>
+                 <div id="test-connection-result" class="text-sm flex items-center gap-2"></div>
+                 <div class="flex gap-2">
+                    <button id="wizard-back-btn" class="px-4 py-2 rounded-md text-slate-300 hover:bg-slate-700/50 transition-colors hidden">Back</button>
+                    <button id="wizard-next-btn" class="px-4 py-2 rounded-md bg-sky-500 text-white font-semibold hover:bg-sky-600 transition-colors">Next</button>
+                    <button id="test-connection-btn" class="px-4 py-2 rounded-md bg-slate-600 text-white font-semibold hover:bg-slate-500 transition-colors hidden">Test Connection</button>
+                    <button id="save-settings-btn" class="px-4 py-2 rounded-md bg-green-500 text-white font-semibold hover:bg-green-600 transition-colors hidden disabled:bg-slate-600" disabled>Save</button>
+                 </div>
             </div>
         </div>
     </div>
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // --- DOM Elements ---
         const app = {
             settingsBtn: document.getElementById('settings-btn'),
             settingsModal: document.getElementById('settings-modal'),
-            saveSettingsBtn: document.getElementById('save-settings'),
+            saveSettingsBtn: document.getElementById('save-settings-btn'),
             cancelSettingsBtn: document.getElementById('cancel-settings'),
             serverUrlInput: document.getElementById('server-url'),
             usernameInput: document.getElementById('username'),
@@ -172,127 +198,65 @@
             statusContainer: document.getElementById('status-container'),
             loadingIndicator: document.getElementById('loading-indicator'),
             emptyState: document.getElementById('empty-state'),
+            welcomeState: document.getElementById('welcome-state'),
+            startSetupBtn: document.getElementById('start-setup-btn'),
+            // Wizard elements
+            wizardSteps: document.querySelectorAll('.wizard-step'),
+            wizardBackBtn: document.getElementById('wizard-back-btn'),
+            wizardNextBtn: document.getElementById('wizard-next-btn'),
+            testConnectionBtn: document.getElementById('test-connection-btn'),
+            testConnectionResult: document.getElementById('test-connection-result'),
         };
 
-        // --- State ---
         let state = {
             config: { url: '', username: '', password: '' },
-            torrents: [],
-            isLoggedIn: false,
-            isLoading: false,
-            refreshInterval: null,
-            torrentFile: null,
+            torrents: [], isLoggedIn: false, isLoading: false,
+            refreshInterval: null, torrentFile: null, wizardStep: 1,
         };
 
-        // --- Utility Functions ---
-        const formatBytes = (bytes, decimals = 2) => {
-            if (!+bytes) return '0 Bytes';
-            const k = 1024;
-            const dm = decimals < 0 ? 0 : decimals;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-        };
-        
-        const formatEta = (seconds) => {
-            if (seconds > 8640000 || !isFinite(seconds)) return '∞';
-            if (seconds < 1) return 'Done';
-            const d = Math.floor(seconds / 86400);
-            const h = Math.floor((seconds % 86400) / 3600);
-            const m = Math.floor((seconds % 3600) / 60);
-            return [d > 0 ? `${d}d` : '', h > 0 ? `${h}h` : '', m > 0 ? `${m}m` : ''].filter(Boolean).join(' ') || '...';
-        };
+        const formatBytes = (b, d=2) => {!+b? "0 Bytes" : (k=1024, dm=0>d?0:d, sizes=["Bytes","KB","MB","GB","TB","PB"], i=Math.floor(Math.log(b)/Math.log(k)), `${parseFloat((b/Math.pow(k,i)).toFixed(dm))} ${sizes[i]}`)};
+        const formatEta = (s) => {if(s>864e5||!isFinite(s))return "∞"; if(1>s)return "Done"; const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60); return[d>0?`${d}d`:"",h>0?`${h}h`:"",m>0?`${m}m`:""].filter(Boolean).join(" ")||"..."};
 
-        // --- UI Rendering ---
         const renderTorrentList = () => {
             app.loadingIndicator.classList.add('hidden');
-            
             if (state.torrents.length === 0) {
                 app.statusContainer.classList.remove('hidden');
                 app.emptyState.classList.remove('hidden');
-                app.torrentList.innerHTML = '';
-                return;
+                app.welcomeState.classList.add('hidden');
+                app.torrentList.innerHTML = ''; return;
             }
-            
             app.statusContainer.classList.add('hidden');
             app.torrentList.innerHTML = '';
-
-            const sortedTorrents = [...state.torrents].sort((a, b) => b.added_on - a.added_on);
-
-            sortedTorrents.forEach(torrent => {
-                const progress = (torrent.progress * 100).toFixed(1);
-                const isDownloading = torrent.state === 'downloading' || torrent.state === 'metaDL';
-                
-                const torrentElement = document.createElement('div');
-                torrentElement.className = 'bg-slate-800/70 p-4 rounded-lg border border-slate-700 shadow-lg hover:border-sky-500/50 transition-all duration-300';
-                torrentElement.innerHTML = `
-                    <div class="flex flex-col md:flex-row justify-between md:items-center gap-2">
-                        <p class="font-semibold text-slate-50 truncate pr-4" title="${torrent.name}">${torrent.name}</p>
-                        <span class="text-xs font-mono px-2 py-1 rounded bg-slate-700 text-slate-300 self-start md:self-center capitalize">${torrent.state.replace(/([A-Z])/g, ' $1').trim()}</span>
-                    </div>
-                    <div class="mt-4">
-                        <div class="flex justify-between items-center mb-1 text-sm text-slate-400">
-                            <span>${progress}% of ${formatBytes(torrent.size)}</span>
-                            <span>${formatBytes(torrent.dlspeed)}/s ↓</span>
-                        </div>
-                        <div class="w-full bg-slate-700 rounded-full h-2.5">
-                            <div class="bg-gradient-to-r from-sky-500 to-cyan-400 h-2.5 rounded-full transition-all duration-500" style="width: ${progress}%"></div>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-sm text-center border-t border-slate-700 pt-4">
-                        <div><p class="text-slate-400">ETA</p><p class="font-medium text-white">${formatEta(torrent.eta)}</p></div>
-                        <div><p class="text-slate-400">Up</p><p class="font-medium text-white">${formatBytes(torrent.upspeed)}/s</p></div>
-                        <div><p class="text-slate-400">Ratio</p><p class="font-medium text-white">${torrent.ratio.toFixed(2)}</p></div>
-                        <div><p class="text-slate-400">Peers</p><p class="font-medium text-white">${torrent.num_leechs} (${torrent.num_seeds})</p></div>
-                    </div>
-                `;
-                app.torrentList.appendChild(torrentElement);
+            [...state.torrents].sort((a,b)=>b.added_on-a.added_on).forEach(t => {
+                const progress=(t.progress*100).toFixed(1), isDl=t.state==="downloading"||t.state==="metaDL";
+                const el=document.createElement('div');
+                el.className='bg-slate-800/70 p-4 rounded-lg border border-slate-700 shadow-lg hover:border-sky-500/50 transition-all duration-300';
+                el.innerHTML=`<div class="flex flex-col md:flex-row justify-between md:items-center gap-2"><p class="font-semibold text-slate-50 truncate pr-4" title="${t.name}">${t.name}</p><span class="text-xs font-mono px-2 py-1 rounded bg-slate-700 text-slate-300 self-start md:self-center capitalize">${t.state.replace(/([A-Z])/g,' $1').trim()}</span></div><div class="mt-4"><div class="flex justify-between items-center mb-1 text-sm text-slate-400"><span>${progress}% of ${formatBytes(t.size)}</span><span>${formatBytes(t.dlspeed)}/s ↓</span></div><div class="w-full bg-slate-700 rounded-full h-2.5"><div class="bg-gradient-to-r from-sky-500 to-cyan-400 h-2.5 rounded-full transition-all duration-500" style="width: ${progress}%"></div></div></div><div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-sm text-center border-t border-slate-700 pt-4"><div><p class="text-slate-400">ETA</p><p class="font-medium text-white">${formatEta(t.eta)}</p></div><div><p class="text-slate-400">Up</p><p class="font-medium text-white">${formatBytes(t.upspeed)}/s</p></div><div><p class="text-slate-400">Ratio</p><p class="font-medium text-white">${t.ratio.toFixed(2)}</p></div><div><p class="text-slate-400">Peers</p><p class="font-medium text-white">${t.num_leechs} (${t.num_seeds})</p></div></div>`;
+                app.torrentList.appendChild(el);
             });
         };
-        
-        const updateConnectionStatus = (isConnected) => {
-            app.connectionStatus.classList.toggle('bg-green-500', isConnected);
-            app.connectionStatus.classList.toggle('bg-red-500', !isConnected);
-            app.connectionStatus.title = isConnected ? 'Connected' : 'Disconnected';
-        };
+        const updateConnectionStatus = (c) => { app.connectionStatus.classList.toggle('bg-green-500',c); app.connectionStatus.classList.toggle('bg-red-500',!c); app.connectionStatus.title=c?'Connected':'Disconnected'; };
 
-        // --- qBittorrent API Logic ---
-        const apiRequest = async (endpoint, options = {}) => {
-            const url = `${state.config.url}/api/v2${endpoint}`;
+        const apiRequest = async (endpoint, options={}, config=state.config) => {
+            const url = `${config.url}/api/v2${endpoint}`;
             try {
                 const response = await fetch(url, { ...options, credentials: 'include' });
-                if (response.status === 403) {
-                    console.error("Authentication failed. Re-logging in.");
-                    state.isLoggedIn = false;
-                    updateConnectionStatus(false);
-                    await login();
-                    return null;
-                }
+                if(response.status===403){ throw new Error("Auth Failed"); }
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const contentType = response.headers.get("content-type");
                 return contentType?.includes("application/json") ? await response.json() : await response.text();
-            } catch (error) {
-                console.error(`API request to ${endpoint} failed:`, error);
-                updateConnectionStatus(false);
-                return null;
-            }
+            } catch (error) { throw error; }
         };
 
-        const login = async () => {
-            if (!state.config.url || !state.config.username) return false;
+        const login = async (config=state.config) => {
+            if (!config.url || !config.username) return false;
             const formData = new FormData();
-            formData.append('username', state.config.username);
-            formData.append('password', state.config.password);
+            formData.append('username', config.username);
+            formData.append('password', config.password);
             try {
-                const res = await apiRequest('/auth/login', { method: 'POST', body: formData });
-                state.isLoggedIn = res?.trim().toLowerCase() === 'ok.';
-                updateConnectionStatus(state.isLoggedIn);
-                return state.isLoggedIn;
-            } catch (error) {
-                state.isLoggedIn = false;
-                updateConnectionStatus(false);
-                return false;
-            }
+                const res = await apiRequest('/auth/login', { method: 'POST', body: formData }, config);
+                return res?.trim().toLowerCase() === 'ok.';
+            } catch (error) { console.error("Login attempt failed:", error); return false; }
         };
 
         const fetchTorrents = async () => {
@@ -302,132 +266,106 @@
                 app.statusContainer.classList.remove('hidden');
                 app.loadingIndicator.classList.remove('hidden');
                 app.emptyState.classList.add('hidden');
+                app.welcomeState.classList.add('hidden');
             }
-            const data = await apiRequest('/torrents/info');
-            if (data) {
+            try {
+                const data = await apiRequest('/torrents/info');
                 state.torrents = data;
                 renderTorrentList();
-            } else if (!state.isLoggedIn) {
-                 await loginAndFetch();
+            } catch (error) {
+                console.error("Failed to fetch torrents:", error);
+                state.isLoggedIn = false;
+                updateConnectionStatus(false);
+                await loginAndFetch(); // Try to re-login
+            } finally {
+                state.isLoading = false;
             }
-            state.isLoading = false;
         };
 
         const addTorrent = async () => {
-            const magnetUrl = app.magnetUrlInput.value.trim();
-            if (!magnetUrl && !state.torrentFile) return;
             if (!state.isLoggedIn) { alert('Not connected. Check settings.'); return; }
-
+            if (!app.magnetUrlInput.value.trim() && !state.torrentFile) return;
             app.addTorrentBtn.disabled = true;
             app.addTorrentBtn.textContent = '...';
-
             const formData = new FormData();
-            if (state.torrentFile) {
-                formData.append('torrents', state.torrentFile, state.torrentFile.name);
-            } else {
-                formData.append('urls', magnetUrl);
-            }
-
-            const result = await apiRequest('/torrents/add', { method: 'POST', body: formData });
-
-            if (result?.trim().toLowerCase() === 'ok.') {
-                app.magnetUrlInput.value = '';
-                state.torrentFile = null;
-                app.fileNameDisplay.textContent = '';
-                setTimeout(fetchTorrents, 1000);
-            } else {
-                alert('Failed to add torrent. Check the URL/file and your connection.');
-            }
-            
-            app.addTorrentBtn.disabled = false;
-            app.addTorrentBtn.textContent = 'Add';
-        };
-
-        // --- Main Logic & Event Handlers ---
-        const loadConfig = () => {
+            state.torrentFile ? formData.append('torrents', state.torrentFile, state.torrentFile.name) : formData.append('urls', app.magnetUrlInput.value.trim());
             try {
-                const savedConfig = localStorage.getItem('seedboxLiteConfig');
-                if (savedConfig) {
-                    state.config = JSON.parse(savedConfig);
-                    app.serverUrlInput.value = state.config.url;
-                    app.usernameInput.value = state.config.username;
-                    app.passwordInput.value = state.config.password;
-                }
-            } catch (e) {
-                console.error("Failed to load config", e);
-            }
-        };
-
-        const saveConfig = () => {
-            state.config.url = app.serverUrlInput.value.trim().replace(/\/$/, ""); // Remove trailing slash
-            state.config.username = app.usernameInput.value.trim();
-            state.config.password = app.passwordInput.value;
-            localStorage.setItem('seedboxLiteConfig', JSON.stringify(state.config));
-        };
-
-        const loginAndFetch = async () => {
-            if (await login()) {
-                await fetchTorrents();
-            }
-        };
-
-        const startAutoRefresh = () => {
-            if (state.refreshInterval) clearInterval(state.refreshInterval);
-            state.refreshInterval = setInterval(fetchTorrents, 5000);
+                const result = await apiRequest('/torrents/add', { method: 'POST', body: formData });
+                if (result?.trim().toLowerCase() === 'ok.') {
+                    app.magnetUrlInput.value = '';
+                    state.torrentFile = null;
+                    app.fileNameDisplay.textContent = '';
+                    setTimeout(fetchTorrents, 1000);
+                } else throw new Error("Add torrent failed");
+            } catch (e) { alert('Failed to add torrent. Check the URL/file and your connection.');
+            } finally { app.addTorrentBtn.disabled = false; app.addTorrentBtn.textContent = 'Add'; }
         };
         
+        const loadConfig = () => { try { const c = localStorage.getItem('seedboxLiteConfig'); if(c){state.config=JSON.parse(c); Object.keys(state.config).forEach(k => app[k+'Input'].value=state.config[k])}} catch (e) {console.error("Failed to load config", e)} };
+        const saveConfig = () => { state.config.url = app.serverUrlInput.value.trim().replace(/\/$/,""); state.config.username=app.usernameInput.value.trim(); state.config.password=app.passwordInput.value; localStorage.setItem('seedboxLiteConfig', JSON.stringify(state.config)); };
+        
+        const loginAndFetch = async () => {
+            state.isLoggedIn = await login();
+            updateConnectionStatus(state.isLoggedIn);
+            if(state.isLoggedIn) await fetchTorrents();
+        };
+
+        const startAutoRefresh = () => { if (state.refreshInterval) clearInterval(state.refreshInterval); state.refreshInterval = setInterval(fetchTorrents, 5000); };
         const stopAutoRefresh = () => clearInterval(state.refreshInterval);
 
-        // --- Event Listeners ---
-        app.settingsBtn.addEventListener('click', () => {
-            app.settingsModal.classList.remove('hidden');
-            stopAutoRefresh();
-        });
-        
-        const closeSettings = () => {
-            app.settingsModal.classList.add('hidden');
-            if (state.isLoggedIn) startAutoRefresh();
+        const updateWizardView = () => {
+            app.wizardSteps.forEach((step, i) => step.classList.toggle('active', i + 1 === state.wizardStep));
+            app.wizardBackBtn.classList.toggle('hidden', state.wizardStep === 1);
+            app.wizardNextBtn.classList.toggle('hidden', state.wizardStep === 2);
+            app.testConnectionBtn.classList.toggle('hidden', state.wizardStep !== 2);
+            app.saveSettingsBtn.classList.toggle('hidden', state.wizardStep !== 2);
+            app.testConnectionResult.innerHTML = '';
+            app.saveSettingsBtn.disabled = true;
         };
 
+        const openSettings = () => { state.wizardStep = 1; updateWizardView(); app.settingsModal.classList.remove('hidden'); stopAutoRefresh(); };
+        const closeSettings = () => { app.settingsModal.classList.add('hidden'); if(state.isLoggedIn) startAutoRefresh(); };
+        
+        app.settingsBtn.addEventListener('click', openSettings);
+        app.startSetupBtn.addEventListener('click', openSettings);
         app.cancelSettingsBtn.addEventListener('click', closeSettings);
-        app.settingsModal.addEventListener('click', (e) => {
-            if (e.target === app.settingsModal) closeSettings();
+        app.settingsModal.addEventListener('click', e => { if (e.target === app.settingsModal) closeSettings() });
+        app.wizardBackBtn.addEventListener('click', () => { if(state.wizardStep > 1) { state.wizardStep--; updateWizardView(); }});
+        app.wizardNextBtn.addEventListener('click', () => { if(state.wizardStep < 2) { state.wizardStep++; updateWizardView(); }});
+        
+        app.testConnectionBtn.addEventListener('click', async () => {
+            const tempConfig = { url: app.serverUrlInput.value.trim().replace(/\/$/,""), username: app.usernameInput.value.trim(), password: app.passwordInput.value };
+            app.testConnectionResult.innerHTML = `<div class="spinner-small"></div><span class="text-slate-400">Testing...</span>`;
+            const success = await login(tempConfig);
+            if (success) {
+                app.testConnectionResult.innerHTML = `<span class="text-green-400">✔ Success!</span>`;
+                app.saveSettingsBtn.disabled = false;
+            } else {
+                app.testConnectionResult.innerHTML = `<span class="text-red-400">✖ Failed. Check details.</span>`;
+                app.saveSettingsBtn.disabled = true;
+            }
         });
-
+        
         app.saveSettingsBtn.addEventListener('click', async () => {
-            saveConfig();
-            app.settingsModal.classList.add('hidden');
-            app.torrentList.innerHTML = '';
+            saveConfig(); closeSettings(); app.torrentList.innerHTML = ''; app.statusContainer.classList.remove('hidden'); app.loadingIndicator.classList.remove('hidden'); app.emptyState.classList.add('hidden'); app.welcomeState.classList.add('hidden');
             await loginAndFetch();
-            if (state.isLoggedIn) startAutoRefresh();
+            if(state.isLoggedIn) startAutoRefresh();
         });
         
         app.addTorrentBtn.addEventListener('click', addTorrent);
-        app.magnetUrlInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addTorrent();
-        });
-        
-        app.torrentFileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                state.torrentFile = file;
-                app.fileNameDisplay.textContent = `Selected file: ${file.name}`;
-                app.magnetUrlInput.value = ''; // Clear magnet input if file is selected
-            }
-        });
+        app.magnetUrlInput.addEventListener('keypress', (e) => e.key==='Enter' && addTorrent());
+        app.torrentFileInput.addEventListener('change', (e) => { const f=e.target.files[0]; if(f){state.torrentFile=f; app.fileNameDisplay.textContent=`Selected: ${f.name}`; app.magnetUrlInput.value=''}});
 
-        // --- Initialization ---
         const init = async () => {
             loadConfig();
             if (state.config.url) {
+                app.statusContainer.classList.remove('hidden'); app.loadingIndicator.classList.remove('hidden');
                 await loginAndFetch();
-                if (state.isLoggedIn) {
-                    startAutoRefresh();
-                } else {
-                    app.settingsModal.classList.remove('hidden');
-                }
+                if (state.isLoggedIn) startAutoRefresh();
+                else openSettings();
             } else {
-                app.settingsModal.classList.remove('hidden');
+                app.statusContainer.classList.remove('hidden');
+                app.welcomeState.classList.remove('hidden');
             }
         };
 
